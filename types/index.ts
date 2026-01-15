@@ -1,22 +1,15 @@
-
 /**
  * OlieHub V3 - Core Type Definitions
  * Domain: Artisanal Luxury / Make-to-Order Business
  */
 
 export type ChannelSource = 'whatsapp' | 'instagram' | 'pinterest' | 'facebook' | 'email';
-
 export type ConvoStatus = 'bot' | 'queue' | 'assigned' | 'closed';
-
 export type SalesStage = 'cobrar' | 'pago' | 'producao' | 'enviado' | 'entregue';
-
 export type ProductionStage = 'corte' | 'costura' | 'montagem' | 'acabamento' | 'pronto';
-
 export type MessageType = 'text' | 'image' | 'system' | 'audio';
-
 export type MessageDirection = 'inbound' | 'outbound';
 
-// Added UserProfile for Supabase Auth and Role-based UI logic
 export interface UserProfile {
   id: string;
   role: 'dev' | 'admin' | 'agent' | 'viewer';
@@ -24,7 +17,6 @@ export interface UserProfile {
   avatar_url?: string;
 }
 
-// Added IntegrationLog for System Diagnostics / DevTools
 export interface IntegrationLog {
   id: string;
   service: 'TINY' | 'VNDA' | 'META' | string;
@@ -35,7 +27,6 @@ export interface IntegrationLog {
   timestamp: string;
 }
 
-// Added Client for the Unified Inbox Conversation List
 export interface Client {
   id: string;
   name: string;
@@ -56,7 +47,7 @@ export interface Customer {
   tiny_contact_id?: string;
   vnda_id?: string;
   total_orders: number;
-  ltv: number; // Lifetime Value
+  ltv: number;
   tags: string[];
 }
 
@@ -75,7 +66,7 @@ export interface Product {
   image_url: string;
   options: {
     colors: ProductOptionColor[];
-    hardware: string[]; // e.g., ['Dourado', 'Prateado', 'Grafite']
+    hardware: string[];
     personalization: {
       allowed: boolean;
       max_chars: number;
@@ -86,6 +77,7 @@ export interface Product {
 
 export interface CartItem {
   product_id: string;
+  name?: string;
   quantity: number;
   unit_price: number;
   configuration: {
@@ -95,7 +87,6 @@ export interface CartItem {
   };
 }
 
-// Fix: Adding missing Order interface for CRM and Sales history integration
 export interface Order {
   id: string;
   date: string;
@@ -106,7 +97,7 @@ export interface Order {
 export interface Conversation {
   id: string;
   customer_id: string;
-  customer: Customer; // Denormalized for UI performance
+  customer: Customer;
   status: ConvoStatus;
   sales_stage: SalesStage;
   assignee_id: string | null;
@@ -121,27 +112,7 @@ export interface Message {
   content: string;
   type: MessageType;
   direction: MessageDirection;
-  sender_id?: string; // Null if inbound (customer)
+  sender_id?: string;
   read: boolean;
   created_at: string;
-}
-
-export interface ProductionOrder {
-  id: string;
-  order_id: string; // Internal Order ID from Sales
-  customer_name: string;
-  product_snapshot: CartItem;
-  production_stage: ProductionStage;
-  due_date: string;
-  priority: 'low' | 'medium' | 'high';
-  notes?: string;
-}
-
-export interface Agent {
-  id: string;
-  name: string;
-  email: string;
-  role: 'admin' | 'agent' | 'viewer' | 'dev';
-  online: boolean;
-  avatar_url?: string;
 }

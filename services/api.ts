@@ -1,4 +1,3 @@
-
 /**
  * OlieHub V2 - Service Adapter (The Universal Translator)
  * 
@@ -16,7 +15,7 @@ import {
 import { MOCK_PRODUCTS } from '../lib/constants';
 
 // --- CONFIGURAÇÃO GLOBAL ---
-// Alterne para false quando as APIs (TINY_TOKEN, etc) estiverem configuradas
+// Alterne para false quando as APIs estiverem configuradas
 const USE_MOCK = true;
 
 /**
@@ -66,19 +65,6 @@ export const OrderService = {
       };
     }
 
-    // ESTRUTURA PARA API REAL (Futura Implementação)
-    /*
-    const response = await fetch(`${process.env.VITE_TINY_API_URL}/pedido.incluir.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        token: process.env.VITE_TINY_API_TOKEN!,
-        formato: 'JSON',
-        pedido: JSON.stringify({ ... })
-      })
-    });
-    return response.json();
-    */
     throw new Error("API Real do Tiny não configurada no ambiente.");
   }
 };
@@ -101,7 +87,6 @@ export const CatalogService = {
       );
     }
 
-    // No futuro: Promise.all([fetchTiny(), fetchVnda()]) e merge por SKU
     return [];
   }
 };
@@ -117,7 +102,6 @@ export const CrmService = {
     if (USE_MOCK) {
       await simulateNetwork(0.05); // 5% de chance de erro
 
-      // Auditoria: Handle 404 gracefully
       if (customerId === 'cust-not-found') {
         console.warn("[CRM] Cliente não possui registros históricos.");
         return [];
@@ -126,13 +110,13 @@ export const CrmService = {
       return [
         {
           id: 'TNY-44921',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(), // 30 dias atrás
+          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(), 
           total: 489.00,
           status: 'Entregue'
         },
         {
           id: 'TNY-55012',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), // 5 dias atrás
+          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), 
           total: 159.90,
           status: 'Processando'
         }
@@ -154,11 +138,10 @@ export const OmnichannelService = {
     if (USE_MOCK) {
       await simulateNetwork(0.02);
 
-      // Diferenciação de lógica por canal (Audit)
       if (channel === 'whatsapp') {
-        console.debug(`[SIMULAÇÃO META API] POST https://graph.facebook.com/v17.0/${process.env.VITE_META_PHONE_ID}/messages`);
+        console.debug(`[SIMULAÇÃO META API] Enviando WhatsApp...`);
       } else if (channel === 'instagram') {
-        console.debug(`[SIMULAÇÃO GRAPH API] POST https://graph.facebook.com/v17.0/me/messages (Instagram Scope)`);
+        console.debug(`[SIMULAÇÃO GRAPH API] Enviando Instagram...`);
       }
 
       return true;

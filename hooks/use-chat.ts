@@ -1,10 +1,8 @@
-
 "use client";
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { createClient } from '../lib/supabase/client';
-// Fix: Import from types/index.ts to use V3 domain types (e.g., channel_source, ltv, created_at)
-import { Conversation, Message, Customer } from '../types/index';
+import { Conversation, Message } from '../types/index';
 
 const supabase = createClient();
 
@@ -13,53 +11,46 @@ export function useChat(selectedConversationId?: string) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Ref para evitar loops em updates de mensagens lidas
+  const lastReadId = useRef<string | null>(null);
 
-  /**
-   * Busca a lista de conversas ativas com dados do cliente (Join)
-   * Alinhado com o schema V3 (customers e conversations)
-   */
   const fetchConversations = useCallback(async () => {
     try {
       const { data, error } = await supabase
         .from('conversations')
         .select(`
-          id,
-          status,
-          sales_stage,
-          assignee_id,
-          last_message,
-          last_message_at,
-          unread_count,
-          customer_id,
-          customer:customers (
-            id,
-            full_name,
-            email,
-            phone,
-            avatar_url,
-            channel_source,
-            tiny_contact_id,
-            vnda_id,
-            total_orders,
-            ltv,
-            tags
-          )
+          id, status, sales_stage, assignee_id, last_message, last_message_at, unread_count, customer_id,
+          customer:customers (*)
         `)
         .order('last_message_at', { ascending: false });
 
       if (error) throw error;
       setConversations(data as unknown as Conversation[]);
     } catch (err: any) {
-      console.error('Erro ao buscar conversas:', err.message);
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
-  /**
-   * Busca o histórico de mensagens de uma conversa específica
-   */
+  const markAsRead = useCallback(async (id: string) => {
+    if (lastReadId.current === id) return;
+    try {
+      await supabase
+        .from('conversations')
+        .update({ unread_count: 0 })
+        .eq('id', id);
+      
+      setConversations(prev => prev.map(c => 
+        c.id === id ? { ...c, unread_count: 0 } : c
+      ));
+      lastReadId.current = id;
+    } catch (err) {
+      console.error('Erro ao marcar como lida');
+    }
+  }, []);
+
   const fetchMessages = useCallback(async (conversationId: string) => {
     try {
       const { data, error } = await supabase
@@ -69,49 +60,46 @@ export function useChat(selectedConversationId?: string) {
         .order('created_at', { ascending: true });
 
       if (error) throw error;
-
-      // Mapeia para o formato V3
-      const formattedMessages: Message[] = data.map(m => ({
-        id: m.id,
-        conversation_id: m.conversation_id,
-        content: m.content,
-        type: m.type,
-        direction: m.direction,
-        sender_id: m.sender_id,
-        read: m.read,
-        created_at: m.created_at
-      }));
-
-      setMessages(formattedMessages);
+      setMessages(data as Message[]);
     } catch (err: any) {
       console.error('Erro ao buscar mensagens:', err.message);
     }
   }, []);
 
-  /**
-   * Envia uma nova mensagem (Outbound)
-   */
   const sendMessage = async (content: string, type: any = 'text') => {
     if (!selectedConversationId || !content.trim()) return;
 
     try {
-      // Pega o usuário logado para o sender_id
       const { data: { user } } = await supabase.auth.getUser();
+      const tempId = crypto.randomUUID();
+      
+      // Optimistic Update
+      const newMessage: Message = {
+        id: tempId,
+        conversation_id: selectedConversationId,
+        content,
+        direction: 'outbound',
+        type,
+        sender_id: user?.id,
+        read: true,
+        created_at: new Date().toISOString()
+      };
+      
+      setMessages(prev => [...prev, newMessage]);
 
-      const { error } = await supabase
+      const { error: insertError } = await supabase
         .from('messages')
         .insert([{
           conversation_id: selectedConversationId,
           content,
           direction: 'outbound',
-          type: type,
+          type,
           sender_id: user?.id || null,
           read: true
         }]);
 
-      if (error) throw error;
+      if (insertError) throw insertError;
 
-      // Atualiza o estado da conversa (Denormalização para lista rápida)
       await supabase
         .from('conversations')
         .update({ 
@@ -121,69 +109,39 @@ export function useChat(selectedConversationId?: string) {
         .eq('id', selectedConversationId);
 
     } catch (err: any) {
-      console.error('Erro ao enviar mensagem:', err.message);
+      console.error('Erro ao enviar:', err.message);
+      // Aqui poderíamos remover a mensagem otimista em caso de erro real
     }
   };
 
-  /**
-   * Setup Realtime Subscription
-   */
   useEffect(() => {
     fetchConversations();
-
     const channel = supabase
-      .channel('oliehub-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'messages' },
-        (payload) => {
-          const newMessage = payload.new as any;
-          if (payload.eventType === 'INSERT' && newMessage.conversation_id === selectedConversationId) {
-            // Fix: Object literal matches V3 Message type (uses created_at instead of timestamp)
-            setMessages(prev => [...prev, {
-              id: newMessage.id,
-              conversation_id: newMessage.conversation_id,
-              content: newMessage.content,
-              type: newMessage.type,
-              direction: newMessage.direction,
-              sender_id: newMessage.sender_id,
-              read: newMessage.read,
-              created_at: newMessage.created_at
-            }]);
-          }
+      .channel('realtime-updates')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, (payload) => {
+        const newMessage = payload.new as Message;
+        if (payload.eventType === 'INSERT' && newMessage.conversation_id === selectedConversationId) {
+          setMessages(prev => {
+            if (prev.find(m => m.id === newMessage.id)) return prev;
+            return [...prev, newMessage];
+          });
         }
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'conversations' },
-        () => {
-          fetchConversations();
-        }
-      )
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => {
+        fetchConversations();
+      })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [selectedConversationId, fetchConversations]);
 
-  /**
-   * Efeito para carregar mensagens quando a seleção muda
-   */
   useEffect(() => {
     if (selectedConversationId) {
+      setMessages([]); // Limpa buffer para evitar flicker
       fetchMessages(selectedConversationId);
-    } else {
-      setMessages([]);
+      markAsRead(selectedConversationId);
     }
-  }, [selectedConversationId, fetchMessages]);
+  }, [selectedConversationId, fetchMessages, markAsRead]);
 
-  return {
-    conversations,
-    messages,
-    isLoading,
-    error,
-    sendMessage,
-    refreshConversations: fetchConversations
-  };
+  return { conversations, messages, isLoading, error, sendMessage };
 }

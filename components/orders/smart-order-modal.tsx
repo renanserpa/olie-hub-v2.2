@@ -1,20 +1,12 @@
-
 "use client";
 
 import React, { useState, useMemo } from 'react';
 import { 
-  ShoppingBag, 
-  Search, 
-  X, 
-  Trash2, 
-  CheckCircle2, 
-  Loader2, 
-  ChevronRight,
-  Palette,
-  Type
+  ShoppingBag, Search, X, Trash2, CheckCircle2, 
+  Loader2, Palette, AlertCircle
 } from 'lucide-react';
-// Fix: Import from types/index.ts to use V3 domain types (e.g., options, base_price, image_url)
 import { Product, CartItem } from '../../types/index';
+import { OrderService } from '../../services/api';
 
 interface SmartOrderModalProps {
   isOpen: boolean;
@@ -25,17 +17,12 @@ interface SmartOrderModalProps {
 }
 
 export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({ 
-  isOpen, 
-  onClose, 
-  clientName, 
-  catalog,
-  onOrderComplete 
+  isOpen, onClose, clientName, catalog, onOrderComplete 
 }) => {
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [status, setStatus] = useState<'idle' | 'processing' | 'success'>('idle');
-  
-  // State para o produto sendo configurado no momento
+  const [status, setStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [errorMessage, setErrorMessage] = useState('');
   const [configuringProduct, setConfiguringProduct] = useState<Product | null>(null);
   const [currentConfig, setCurrentConfig] = useState<CartItem['configuration']>({
     color: '',
@@ -43,66 +30,67 @@ export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({
     personalization_text: ''
   });
 
-  // Fix: Use sku_base from V3 Product type
   const filteredProducts = useMemo(() => 
     catalog.filter(p => 
       p.name.toLowerCase().includes(search.toLowerCase()) || 
       p.sku_base.toLowerCase().includes(search.toLowerCase())
     ), [search, catalog]);
 
-  // Fix: Use unit_price from V3 CartItem type
-  const total = cart.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0);
+  const total = useMemo(() => cart.reduce((acc, item) => acc + (item.unit_price * item.quantity), 0), [cart]);
 
-  // Fix: Use options and base_price from V3 Product type
   const startConfiguring = (product: Product) => {
     setConfiguringProduct(product);
     setCurrentConfig({
-      color: product.options.colors[0]?.value || '',
+      color: product.options.colors[0]?.label || '',
       hardware: product.options.hardware[0] || '',
       personalization_text: ''
     });
   };
 
-  // Fix: Use base_price from V3 Product type
   const confirmConfig = () => {
     if (!configuringProduct) return;
     
-    setCart(prev => [...prev, {
+    const newItem: CartItem = {
       product_id: configuringProduct.id,
+      name: configuringProduct.name,
       quantity: 1,
       unit_price: configuringProduct.base_price,
-      configuration: { ...currentConfig },
-      // Campos extras para a UI do carrinho
-      name: configuringProduct.name // Adicionado para exibição
-    } as any]);
+      configuration: { ...currentConfig }
+    };
     
+    setCart(prev => [...prev, newItem]);
     setConfiguringProduct(null);
   };
 
-  const removeFromCart = (index: number) => {
-    setCart(prev => prev.filter((_, i) => i !== index));
-  };
-
   const handleFinalize = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || status === 'processing') return;
+    
     setStatus('processing');
-    
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    setStatus('success');
-    
-    const summary = `✨ *Novo Pedido Olie - ${clientName}*\n\n` +
-      cart.map((i: any) => 
-        `• *${i.name}*\n  🎨 Cor: ${i.configuration.color}\n  🔨 Metal: ${i.configuration.hardware}${i.configuration.personalization_text ? `\n  ✍️ Personalização: ${i.configuration.personalization_text}` : ''}`
-      ).join('\n\n') +
-      `\n\n💰 *Total: R$ ${total.toFixed(2)}*\n\n_O pedido já foi enviado para produção em nosso ateliê._`;
-    
-    setTimeout(() => {
-      onOrderComplete(summary);
-      onClose();
-      setCart([]);
-      setStatus('idle');
-    }, 1500);
+    try {
+      const response = await OrderService.create(cart);
+      if (response.status === 'success') {
+        setStatus('success');
+        
+        const summary = `✨ *Novo Pedido Olie - ${clientName}*\n\n` +
+          cart.map(i => 
+            `• *${i.name}*\n  🎨 Cor: ${i.configuration.color}\n  🔨 Metal: ${i.configuration.hardware}${i.configuration.personalization_text ? `\n  ✍️ Personalização: ${i.configuration.personalization_text}` : ''}`
+          ).join('\n\n') +
+          `\n\n💰 *Total: R$ ${total.toFixed(2)}*\n\n_ID Tiny: ${response.tiny_id}_`;
+        
+        setTimeout(() => {
+          onOrderComplete(summary);
+          onClose();
+          setCart([]);
+          setStatus('idle');
+        }, 1500);
+      } else {
+        throw new Error("Resposta inesperada do servidor");
+      }
+    } catch (err: any) {
+      setStatus('error');
+      setErrorMessage(err.message || "Erro ao criar pedido no ERP");
+      setTimeout(() => setStatus('idle'), 4000);
+    }
   };
 
   if (!isOpen) return null;
@@ -110,134 +98,69 @@ export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-md" onClick={onClose} />
-      
       <div className="relative w-full max-w-5xl bg-white rounded-[3rem] shadow-2xl flex h-[700px] overflow-hidden animate-in zoom-in-95 duration-300">
         
-        {/* Lado Esquerdo: Catálogo e Configuração */}
+        {/* Error Overlay */}
+        {status === 'error' && (
+          <div className="absolute inset-0 z-[110] bg-rose-50/90 backdrop-blur-sm flex flex-col items-center justify-center p-10 text-center animate-in fade-in">
+            <AlertCircle size={64} className="text-rose-500 mb-6" />
+            <h3 className="text-2xl font-black italic text-rose-900 mb-2">Ops! Algo deu errado.</h3>
+            <p className="text-rose-700 font-medium mb-8 max-w-md">{errorMessage}</p>
+            <button onClick={() => setStatus('idle')} className="px-8 py-4 bg-rose-500 text-white rounded-2xl font-black uppercase tracking-widest text-[10px]">Tentar Novamente</button>
+          </div>
+        )}
+
         <div className="flex-1 flex flex-col border-r border-stone-100 overflow-hidden">
           {configuringProduct ? (
-            <div className="flex-1 flex flex-col p-10 animate-in slide-in-from-left-4 duration-500">
-              <button onClick={() => setConfiguringProduct(null)} className="text-stone-400 hover:text-[#C08A7D] flex items-center gap-2 text-xs font-black uppercase tracking-widest mb-8">
-                <X size={14}/> Voltar ao Catálogo
+            <div className="flex-1 flex flex-col p-10 animate-in slide-in-from-left-4">
+              <button onClick={() => setConfiguringProduct(null)} className="text-stone-400 hover:text-[#C08A7D] flex items-center gap-2 text-[10px] font-black uppercase tracking-widest mb-8">
+                <X size={14}/> Voltar
               </button>
-              
-              <div className="flex gap-10 h-full">
-                <div className="w-1/2">
-                   {/* Fix: Use image_url from V3 Product type */}
-                   <img src={configuringProduct.image_url} className="w-full aspect-square object-cover rounded-[2.5rem] shadow-2xl" />
-                </div>
-                
-                <div className="flex-1 space-y-8 overflow-y-auto pr-4 scrollbar-hide">
-                  <div>
-                    <h2 className="text-3xl font-black text-[#333333] tracking-tight">{configuringProduct.name}</h2>
-                    {/* Fix: Use base_price from V3 Product type */}
-                    <p className="text-[#C08A7D] font-black text-xl mt-1">R$ {configuringProduct.base_price.toFixed(2)}</p>
-                  </div>
-
-                  {/* Seleção de Cores */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest flex items-center gap-2">
-                      <Palette size={12}/> Escolha a Cor do Couro
-                    </label>
-                    <div className="flex flex-wrap gap-3">
-                      {/* Fix: Use options from V3 Product type */}
+              <div className="flex gap-10">
+                <img src={configuringProduct.image_url} className="w-1/2 aspect-square object-cover rounded-[2.5rem] shadow-xl" />
+                <div className="flex-1 space-y-8">
+                  <h2 className="text-3xl font-black italic">{configuringProduct.name}</h2>
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest flex items-center gap-2"><Palette size={12}/> Escolha o Couro</label>
+                    <div className="flex flex-wrap gap-2">
                       {configuringProduct.options.colors.map(c => (
                         <button 
-                          key={c.value}
-                          onClick={() => setCurrentConfig({...currentConfig, color: c.label})}
-                          className={`flex items-center gap-3 px-4 py-3 rounded-2xl border-2 transition-all ${
-                            currentConfig.color === c.label ? 'border-[#C08A7D] bg-[#FAF9F6]' : 'border-stone-100 hover:border-stone-200'
-                          }`}
+                          key={c.value} 
+                          onClick={() => setCurrentConfig({...currentConfig, color: c.label})} 
+                          className={`px-4 py-2 rounded-xl border-2 transition-all text-xs font-bold ${currentConfig.color === c.label ? 'border-[#C08A7D] bg-stone-50' : 'border-stone-100'}`}
                         >
-                          <div className="w-5 h-5 rounded-full border border-stone-200" style={{ backgroundColor: c.hex }} />
-                          <span className="text-xs font-bold text-stone-700">{c.label}</span>
+                          {c.label}
                         </button>
                       ))}
                     </div>
                   </div>
-
-                  {/* Seleção de Ferragens */}
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Banho dos Metais</label>
-                    <div className="flex gap-3">
-                      {/* Fix: Use options from V3 Product type */}
-                      {configuringProduct.options.hardware.map(h => (
-                        <button 
-                          key={h}
-                          onClick={() => setCurrentConfig({...currentConfig, hardware: h})}
-                          className={`flex-1 py-4 rounded-2xl border-2 font-bold text-xs transition-all ${
-                            currentConfig.hardware === h ? 'border-[#333333] bg-[#333333] text-white' : 'border-stone-100 text-stone-500 hover:border-stone-200'
-                          }`}
-                        >
-                          {h}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Personalização */}
-                  {/* Fix: Use options from V3 Product type */}
-                  {configuringProduct.options.personalization.allowed && (
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-stone-400 uppercase tracking-widest flex items-center justify-between">
-                        Personalização ({configuringProduct.options.personalization.type})
-                        <span>Máx {configuringProduct.options.personalization.max_chars} chars</span>
-                      </label>
-                      <input 
-                        type="text"
-                        maxLength={configuringProduct.options.personalization.max_chars}
-                        placeholder="Ex: M.G"
-                        className="w-full bg-[#FAF9F6] border-2 border-stone-100 rounded-2xl px-5 py-4 text-sm font-bold uppercase tracking-widest outline-none focus:border-[#C08A7D] transition-all"
-                        value={currentConfig.personalization_text}
-                        onChange={(e) => setCurrentConfig({...currentConfig, personalization_text: e.target.value})}
-                      />
-                    </div>
-                  )}
-
-                  <button 
-                    onClick={confirmConfig}
-                    className="w-full bg-[#C08A7D] text-white font-black py-5 rounded-2xl shadow-xl shadow-[#C08A7D]/20 hover:scale-[1.02] active:scale-95 transition-all"
-                  >
-                    Adicionar ao Pedido
-                  </button>
+                  <button onClick={confirmConfig} className="w-full bg-[#C08A7D] text-white font-black py-4 rounded-2xl shadow-lg hover:bg-[#A67569] transition-all">Adicionar ao Carrinho</button>
                 </div>
               </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col overflow-hidden">
               <div className="p-10 border-b border-stone-50">
-                <h2 className="text-3xl font-black text-[#333333] tracking-tight">Catálogo Ateliê Olie</h2>
-                <div className="relative mt-6">
-                  <Search className="absolute left-5 top-4 text-stone-300" size={20} />
+                <h2 className="text-3xl font-black italic">Catálogo Olie</h2>
+                <div className="relative mt-4">
+                  <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-stone-300" size={18} />
                   <input 
                     type="text" 
-                    placeholder="Buscar peça por nome ou SKU..."
-                    className="w-full bg-[#FAF9F6] border-none rounded-2xl pl-14 pr-6 py-4 text-sm font-medium focus:ring-4 focus:ring-[#C08A7D]/10 transition-all"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Buscar peça por nome ou SKU..." 
+                    className="w-full bg-[#FAF9F6] border border-stone-100 rounded-2xl pl-16 pr-6 py-5 outline-none focus:ring-2 focus:ring-[#C08A7D]/20 transition-all" 
+                    value={search} 
+                    onChange={e => setSearch(e.target.value)} 
                   />
                 </div>
               </div>
-
-              <div className="flex-1 overflow-y-auto p-10 pt-4 grid grid-cols-2 gap-6 scrollbar-hide">
-                {filteredProducts.map(product => (
-                  <div 
-                    key={product.id}
-                    onClick={() => startConfiguring(product)}
-                    className="bg-white rounded-[2.5rem] p-4 border border-stone-50 shadow-sm hover:shadow-2xl hover:border-[#C08A7D]/20 transition-all group cursor-pointer"
-                  >
-                    <div className="aspect-square rounded-[2rem] overflow-hidden mb-4 border border-stone-50">
-                      {/* Fix: Use image_url from V3 Product type */}
-                      <img src={product.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+              <div className="flex-1 overflow-y-auto p-10 grid grid-cols-2 gap-6 scrollbar-hide">
+                {filteredProducts.map(p => (
+                  <div key={p.id} onClick={() => startConfiguring(p)} className="p-4 border border-stone-50 rounded-[2.5rem] hover:shadow-xl hover:border-[#C08A7D]/10 transition-all cursor-pointer group bg-white">
+                    <div className="overflow-hidden rounded-[1.8rem] mb-4 aspect-square">
+                      <img src={p.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                     </div>
-                    <div className="px-2">
-                      <h4 className="font-black text-[#333333] text-sm leading-tight">{product.name}</h4>
-                      <div className="flex justify-between items-center mt-3">
-                        {/* Fix: Use sku_base and base_price from V3 Product type */}
-                        <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">{product.sku_base}</span>
-                        <span className="font-black text-[#C08A7D]">R$ {product.base_price.toFixed(2)}</span>
-                      </div>
-                    </div>
+                    <h4 className="font-black text-sm text-stone-800">{p.name}</h4>
+                    <p className="text-[#C08A7D] font-black mt-2 text-xs">A partir de R$ {p.base_price.toFixed(2)}</p>
                   </div>
                 ))}
               </div>
@@ -245,61 +168,60 @@ export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({
           )}
         </div>
 
-        {/* Lado Direito: Carrinho de Produção */}
-        <div className="w-[380px] bg-[#FAF9F6] flex flex-col p-10">
-          <div className="mb-10">
-            <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-widest">Itens do Pedido</h3>
-            <p className="text-xs text-stone-400 mt-1">Configurações para {clientName}</p>
-          </div>
-
+        <div className="w-[350px] bg-[#FAF9F6] p-10 flex flex-col">
+          <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.2em] mb-10">Carrinho</h3>
           <div className="flex-1 overflow-y-auto space-y-4 scrollbar-hide">
             {cart.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center opacity-20">
-                <ShoppingBag size={60} className="mb-6" />
-                <p className="text-xs font-black uppercase tracking-widest">Pedido Vazio</p>
+              <div className="h-full flex flex-col items-center justify-center text-center opacity-30 px-6">
+                <ShoppingBag size={40} className="mb-4" />
+                <p className="text-[10px] font-black uppercase tracking-widest leading-relaxed">Nenhum item configurado para {clientName}</p>
               </div>
             ) : (
-              cart.map((item: any, idx) => (
-                <div key={idx} className="bg-white p-5 rounded-[2rem] shadow-sm border border-stone-100 group animate-in slide-in-from-right-4 duration-300">
-                  <div className="flex justify-between items-start">
-                    <div className="flex-1 min-w-0 pr-4">
-                      <h4 className="font-black text-xs text-[#333333] truncate">{item.name}</h4>
-                      <p className="text-[10px] font-bold text-[#C08A7D] mt-1">{item.configuration.color} • {item.configuration.hardware}</p>
-                      {item.configuration.personalization_text && (
-                        <p className="text-[9px] font-black text-stone-400 uppercase mt-2 border-t border-stone-50 pt-2 flex items-center gap-1">
-                          <Type size={10}/> Personalizado: {item.configuration.personalization_text}
-                        </p>
-                      )}
+              cart.map((item, idx) => (
+                <div key={idx} className="bg-white p-5 rounded-3xl shadow-sm flex justify-between group animate-in slide-in-from-right-2">
+                  <div className="space-y-1">
+                    <p className="font-black text-xs text-stone-800">{item.name}</p>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 rounded-full bg-[#C08A7D]" />
+                      <p className="text-[10px] font-bold text-[#C08A7D]">{item.configuration.color}</p>
                     </div>
-                    <button 
-                      onClick={() => removeFromCart(idx)}
-                      className="p-2 text-stone-300 hover:text-rose-500 transition-colors"
-                    >
-                      <Trash2 size={16} />
-                    </button>
                   </div>
+                  <button onClick={() => setCart(cart.filter((_, i) => i !== idx))} className="text-stone-300 hover:text-rose-500 transition-colors p-1">
+                    <Trash2 size={16} />
+                  </button>
                 </div>
               ))
             )}
           </div>
 
-          <div className="mt-10 pt-10 border-t border-stone-200">
+          <div className="mt-8 pt-8 border-t border-stone-200">
             <div className="flex justify-between items-end mb-8">
-              <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Valor Total</span>
-              <span className="text-3xl font-black text-[#333333]">R$ {total.toFixed(2)}</span>
+              <span className="text-[10px] font-black uppercase text-stone-400 tracking-widest">Total</span>
+              <span className="text-2xl font-black italic">R$ {total.toFixed(2)}</span>
             </div>
-
+            
             <button 
-              disabled={cart.length === 0 || status !== 'idle'}
-              onClick={handleFinalize}
-              className={`w-full py-5 rounded-2xl font-black flex items-center justify-center gap-4 transition-all shadow-xl ${
-                status === 'success' ? 'bg-emerald-500 text-white shadow-emerald-500/20' :
-                'bg-[#333333] text-white hover:bg-stone-800 shadow-stone-800/20 disabled:opacity-30 disabled:grayscale'
+              disabled={cart.length === 0 || status === 'processing'} 
+              onClick={handleFinalize} 
+              className={`w-full h-16 rounded-[1.5rem] font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all ${
+                status === 'processing' 
+                  ? 'bg-stone-300 text-stone-500' 
+                  : 'bg-gradient-to-r from-[#C08A7D] to-[#A67569] text-white hover:scale-105 active:scale-95 shadow-[#C08A7D]/20'
               }`}
             >
-              {status === 'idle' && <>Passar Pedido <ChevronRight size={20} /></>}
-              {status === 'processing' && <><Loader2 size={24} className="animate-spin" /> Processando...</>}
-              {status === 'success' && <><CheckCircle2 size={24} /> Pedido Enviado!</>}
+              {status === 'processing' ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Sincronizando Tiny...
+                </>
+              ) : status === 'success' ? (
+                <>
+                  <CheckCircle2 size={18} />
+                  Pedido Criado!
+                </>
+              ) : (
+                'Finalizar Pedido'
+              )}
             </button>
           </div>
         </div>

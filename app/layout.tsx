@@ -1,14 +1,8 @@
+"use client";
+
+import React from 'react';
 import './globals.css';
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
 import SupabaseProvider from '../components/providers/supabase-provider';
-
-const inter = Inter({ subsets: ['latin'] });
-
-export const metadata: Metadata = {
-  title: 'OlieHub V2 | Operating System',
-  description: 'Sistema Unificado Ateliê Olie',
-};
 
 export default function RootLayout({
   children,
@@ -17,7 +11,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={`${inter.className} bg-slate-50 text-slate-900 antialiased`}>
+      <body className="min-h-screen bg-stone-50 overflow-x-hidden">
         <SupabaseProvider>
           {children}
         </SupabaseProvider>

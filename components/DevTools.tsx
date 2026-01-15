@@ -1,6 +1,8 @@
+
 import React, { useState, useEffect } from 'react';
 import { Terminal, X, Activity, Database, Server } from 'lucide-react';
-import { IntegrationLog } from '../types';
+// Fix: Import IntegrationLog from types/index.ts to resolve module missing member error
+import { IntegrationLog } from '../types/index';
 
 interface DevToolsProps {
   logs: IntegrationLog[];

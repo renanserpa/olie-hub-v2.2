@@ -1,9 +1,11 @@
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { createBrowserClient } from '@supabase/ssr';
 import { useRouter } from 'next/navigation';
-import { UserProfile } from '../../types';
+// Fix: Use UserProfile from types/index.ts to resolve import error
+import { UserProfile } from '../../types/index';
 
 interface SupabaseContext {
   supabase: any;
@@ -39,7 +41,7 @@ export default function SupabaseProvider({ children }: { children: React.ReactNo
           .eq('id', session.user.id)
           .single();
         
-        setProfile(profileData);
+        setProfile(profileData as UserProfile);
       } else {
         // Redireciona se não houver sessão (exceto na página de login)
         if (window.location.pathname !== '/login') {

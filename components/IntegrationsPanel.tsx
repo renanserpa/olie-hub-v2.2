@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { ShoppingBag, Box, ExternalLink, RefreshCw, CreditCard } from 'lucide-react';
-import { Customer } from '../types';
+// Fix: Import Customer from the unified types/index.ts definitions
+import { Customer } from '../types/index';
 import { Button } from './ui/Button';
 import { tinyService } from '../services/integrations/tiny';
 
@@ -76,11 +78,11 @@ export const IntegrationsPanel: React.FC<IntegrationsPanelProps> = ({ customer, 
             <div className="mt-4 flex gap-2">
                 <div className="flex-1 bg-white p-2 rounded border border-slate-200">
                     <span className="text-[10px] uppercase tracking-wider text-slate-400">LTV (VNDA)</span>
-                    <p className="font-semibold text-slate-800">R$ 1.250</p>
+                    <p className="font-semibold text-slate-800">R$ {customer.ltv.toFixed(2)}</p>
                 </div>
                 <div className="flex-1 bg-white p-2 rounded border border-slate-200">
-                    <span className="text-[10px] uppercase tracking-wider text-slate-400">Last Order</span>
-                    <p className="font-semibold text-slate-800">15 Out</p>
+                    <span className="text-[10px] uppercase tracking-wider text-slate-400">Total Orders</span>
+                    <p className="font-semibold text-slate-800">{customer.total_orders}</p>
                 </div>
             </div>
         </div>

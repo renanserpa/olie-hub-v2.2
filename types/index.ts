@@ -16,6 +16,36 @@ export type MessageType = 'text' | 'image' | 'system' | 'audio';
 
 export type MessageDirection = 'inbound' | 'outbound';
 
+// Added UserProfile for Supabase Auth and Role-based UI logic
+export interface UserProfile {
+  id: string;
+  role: 'dev' | 'admin' | 'agent' | 'viewer';
+  full_name?: string;
+  avatar_url?: string;
+}
+
+// Added IntegrationLog for System Diagnostics / DevTools
+export interface IntegrationLog {
+  id: string;
+  service: 'TINY' | 'VNDA' | 'META' | string;
+  method: string;
+  endpoint: string;
+  status_code: number;
+  duration_ms: number;
+  timestamp: string;
+}
+
+// Added Client for the Unified Inbox Conversation List
+export interface Client {
+  id: string;
+  name: string;
+  avatar: string;
+  lastMessage: string;
+  time: string;
+  source: ChannelSource;
+  unreadCount: number;
+}
+
 export interface Customer {
   id: string;
   full_name: string;
@@ -111,7 +141,7 @@ export interface Agent {
   id: string;
   name: string;
   email: string;
-  role: 'admin' | 'agent' | 'viewer';
+  role: 'admin' | 'agent' | 'viewer' | 'dev';
   online: boolean;
   avatar_url?: string;
 }

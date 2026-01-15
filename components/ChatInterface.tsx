@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { Send, Paperclip, Smile, MoreVertical, Phone } from 'lucide-react';
-import { Conversation, Message } from '../types';
+// Fix: Import types from types/index.ts instead of the deprecated types.ts
+import { Conversation, Message } from '../types/index';
 
 interface ChatInterfaceProps {
   conversation: Conversation;
@@ -29,7 +31,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ conversation, mess
           <div>
             <h3 className="font-semibold text-slate-800">{conversation.customer.full_name}</h3>
             <span className="text-xs text-slate-500">
-              {conversation.source === 'whatsapp' ? 'WhatsApp Business' : 'Instagram DM'}
+              {conversation.customer.channel_source === 'whatsapp' ? 'WhatsApp Business' : 'Instagram DM'}
             </span>
           </div>
         </div>
@@ -55,9 +57,9 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({ conversation, mess
             >
               <p>{msg.content}</p>
               <div className="text-[10px] text-slate-400 text-right mt-1 flex items-center justify-end gap-1">
-                {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 {msg.direction === 'outbound' && (
-                    <span className={msg.status === 'read' ? 'text-blue-400' : 'text-slate-400'}>✓✓</span>
+                    <span className={msg.read ? 'text-blue-400' : 'text-slate-400'}>✓✓</span>
                 )}
               </div>
             </div>

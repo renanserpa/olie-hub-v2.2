@@ -3,7 +3,8 @@
 
 import React, { useState } from 'react';
 import { Search } from 'lucide-react';
-import { Client } from '../../types';
+// Fix: Import Client from the correct types/index.ts location
+import { Client } from '../../types/index';
 
 interface ConversationListProps {
   conversations: Client[];

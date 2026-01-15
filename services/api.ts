@@ -1,8 +1,6 @@
+
 /**
  * OlieHub V2 - Service Adapter (The Universal Translator)
- * 
- * Este arquivo atua como a ponte entre a UI e as fontes de dados externas.
- * Permite alternar entre dados Mock e APIs Reais sem alterar os componentes.
  */
 
 import { 
@@ -10,143 +8,159 @@ import {
   CartItem, 
   Order, 
   Customer, 
-  ChannelSource
-} from '../types/index';
-import { MOCK_PRODUCTS } from '../lib/constants';
+  ChannelSource,
+  ProductionStage
+} from '../types/index.ts';
+import { MOCK_PRODUCTS } from '../lib/constants.ts';
 
-// --- CONFIGURAÇÃO GLOBAL ---
-// Alterne para false quando as APIs estiverem configuradas
 const USE_MOCK = true;
 
-/**
- * Utilitário para simular latência de rede e falhas randômicas.
- * @param errorChance - Probabilidade de 0 a 1 de disparar um erro.
- */
 const simulateNetwork = async (errorChance = 0): Promise<void> => {
-  const latency = 1000; // 1 segundo
+  const latency = 800; // Latência um pouco maior para sensação de "carregamento de dados reais"
   await new Promise(resolve => setTimeout(resolve, latency));
-  
   if (Math.random() < errorChance) {
-    throw new Error("Erro de Conexão: O servidor de integração não respondeu a tempo.");
+    throw new Error("Erro de Conexão: O servidor não respondeu.");
   }
 };
 
-// --- SERVIÇO DE PEDIDOS (TINY ERP BRIDGE) ---
+// --- DASHBOARD SERVICE ---
+export const DashboardService = {
+  getOverview: async () => {
+    await simulateNetwork(0);
+    return {
+      pendingMessages: 12,
+      productionQueue: 45,
+      nextShipment: '15/10',
+      revenueMonth: 'R$ 42.850',
+      activeClients: 8
+    };
+  },
+  
+  getRecentActivity: async () => {
+    await simulateNetwork(0);
+    return [
+      { id: 1, text: 'Ana aprovou o layout da', highlight: 'Bolsa Lille', time: '10:30' },
+      { id: 2, text: 'Novo pedido confirmado via', highlight: 'WhatsApp', time: '11:15' },
+      { id: 3, text: 'Corte finalizado para o lote', highlight: '#Lote442', time: '13:00' },
+      { id: 4, text: 'Expedição agendada para', highlight: 'Amanhã', time: '14:20' }
+    ];
+  },
+
+  getMetrics: async () => {
+    await simulateNetwork(0);
+    return {
+      receita: { value: "R$ 12.840", trend: "+14.2%" },
+      inbox: { value: "14 Chats", subValue: "3 urgentes" },
+      expedicao: { value: "06 Envios", subValue: "Hoje" },
+      nps: { value: "4.9/5", trend: "+0.2" }
+    };
+  },
+  
+  getShortcuts: async () => {
+    await simulateNetwork(0);
+    return [
+      { label: 'Tiny ERP', status: 'online' as const },
+      { label: 'Meta API', status: 'online' as const },
+      { label: 'VNDA Cloud', status: 'online' as const },
+    ];
+  }
+};
+
+// --- PRODUCTION SERVICE ---
+export const ProductionService = {
+  getList: async () => {
+    await simulateNetwork(0.02);
+    // Dados mockados simulando tickets de produção no chão de fábrica
+    return [
+      { id: 'ORD-4410', client: 'Juliana Paes', product: 'Bolsa Lille KTA', stage: 'corte', sku: 'OL-LILLE-KTA-OFF', date: '12 Out' },
+      { id: 'ORD-4411', client: 'Marina Ruy', product: 'Kit Viagem', stage: 'corte', sku: 'OL-TRAVEL-NUDE', date: '12 Out' },
+      
+      { id: 'ORD-4408', client: 'Carla Dias', product: 'Necessaire Box', stage: 'costura', sku: 'OL-BOX-BLK', date: '10 Out', rush: true },
+      { id: 'ORD-4409', client: 'Fernanda Lima', product: 'Mochila Petit', stage: 'costura', sku: 'OL-MAM-ROSE', date: '11 Out' },
+      
+      { id: 'ORD-4405', client: 'Ana Hickmann', product: 'Porta Passaporte', stage: 'montagem', sku: 'OL-PASS-CAR', date: '08 Out' },
+      
+      { id: 'ORD-4402', client: 'Giovanna Ewbank', product: 'Bolsa Lille M', stage: 'acabamento', sku: 'OL-LILLE-M-VIN', date: '05 Out' },
+      { id: 'ORD-4403', client: 'Preta Gil', product: 'Kit Viagem', stage: 'acabamento', sku: 'OL-TRAVEL-BLK', date: '06 Out' },
+      
+      { id: 'ORD-4400', client: 'Ivete Sangalo', product: 'Bolsa Lille G', stage: 'pronto', sku: 'OL-LILLE-G-OFF', date: '01 Out' },
+    ] as Array<{
+      id: string; 
+      client: string; 
+      product: string; 
+      stage: ProductionStage; 
+      sku: string; 
+      date: string;
+      rush?: boolean;
+    }>;
+  }
+};
+
+// --- ORDER SERVICE ---
 export const OrderService = {
-  /**
-   * Cria um pedido no ERP.
-   * Implementa a transformação de "Luxury Config" para o campo de observações.
-   */
+  getList: async (): Promise<any[]> => {
+    await simulateNetwork(0.02);
+    return [
+      { id: '44921', name: 'Ana Carolina Silva', status: 'Produção', price: 'R$ 489,00', date: 'Hoje, 10:20', product: 'Bolsa Lille M' },
+      { id: '44918', name: 'Juliana Fernandes', status: 'Finalizado', price: 'R$ 159,90', date: 'Ontem', product: 'Necessaire Box G' },
+      { id: '44915', name: 'Mariana Oliveira', status: 'Enviado', price: 'R$ 320,00', date: '22 Abr', product: 'Bolsa Lille KTA' },
+      { id: '44912', name: 'Carla Mendonça', status: 'Aguardando', price: 'R$ 1.240,00', date: '21 Abr', product: 'Kit Viagem (3 pçs)' },
+      { id: '44910', name: 'Renata Souza', status: 'Produção', price: 'R$ 549,00', date: '21 Abr', product: 'Mochila Maternidade Petit' },
+    ];
+  },
+  getPipelineSummary: async () => {
+    await simulateNetwork(0);
+    return {
+      producao: 12,
+      expedicao: 5,
+      aguardando: 8,
+      concluidos: 142
+    };
+  },
   create: async (payload: CartItem[]): Promise<{ tiny_id: string; status: string }> => {
-    console.log("[OrderService] Iniciando processamento de pedido...");
-
     if (USE_MOCK) {
-      // Auditoria: 10% de chance de erro para testar spinners e avisos da UI
       await simulateNetwork(0.1); 
-
-      // Transformação de "Lille Configuration" para string única de observação
-      const formattedItems = payload.map(item => {
-        const config = item.configuration;
-        const obs = `Config: [COR: ${config.color}] [METAL: ${config.hardware}]${config.personalization_text ? ` [PERS: ${config.personalization_text}]` : ''}`;
-        
-        return {
-          sku: item.product_id,
-          quantidade: item.quantity,
-          valor_unitario: item.unit_price,
-          observacoes: obs
-        };
-      });
-
-      console.debug("[MOCK ERP PAYLOAD]", formattedItems);
-
       return {
         tiny_id: (Math.floor(Math.random() * 90000) + 10000).toString(),
         status: 'success'
       };
     }
-
-    throw new Error("API Real do Tiny não configurada no ambiente.");
+    throw new Error("API Real não configurada.");
   }
 };
 
-// --- SERVIÇO DE CATÁLOGO (UNIFIED CATALOG) ---
-export const CatalogService = {
-  /**
-   * Busca produtos. Pronto para merge Tiny + VNDA no futuro.
-   */
-  search: async (query: string): Promise<Product[]> => {
-    console.log(`[CatalogService] Buscando por: "${query}"`);
+// --- CUSTOMER SERVICE ---
+export const CustomerService = {
+  getAll: async (): Promise<any[]> => {
+    await simulateNetwork(0.02);
+    return [
+      { name: 'Ana Carolina', ltv: '2.4k', orders: 4, tags: ['VIP', 'Lille'] },
+      { name: 'Bia Mendonça', ltv: '890', orders: 1, tags: ['Lead'] },
+      { name: 'Juliana Paes', ltv: '5.2k', orders: 12, tags: ['VIP Gold'] },
+      { name: 'Mariana Silva', ltv: '420', orders: 2, tags: ['Active'] },
+    ];
+  }
+};
 
+export const CatalogService = {
+  search: async (query: string): Promise<Product[]> => {
     if (USE_MOCK) {
-      await simulateNetwork(0); // Sem erro em busca de catálogo para fluidez
+      await simulateNetwork(0);
       const term = query.toLowerCase();
-      
       return MOCK_PRODUCTS.filter(p => 
-        p.name.toLowerCase().includes(term) || 
-        p.sku_base.toLowerCase().includes(term)
+        p.name.toLowerCase().includes(term) || p.sku_base.toLowerCase().includes(term)
       );
     }
-
     return [];
   }
 };
 
-// --- SERVIÇO DE CRM (HISTORY & LTV) ---
-export const CrmService = {
-  /**
-   * Recupera histórico de compras do cliente.
-   */
-  getHistory: async (customerId: string): Promise<Order[]> => {
-    console.log(`[CrmService] Recuperando histórico: ${customerId}`);
-
-    if (USE_MOCK) {
-      await simulateNetwork(0.05); // 5% de chance de erro
-
-      if (customerId === 'cust-not-found') {
-        console.warn("[CRM] Cliente não possui registros históricos.");
-        return [];
-      }
-
-      return [
-        {
-          id: 'TNY-44921',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(), 
-          total: 489.00,
-          status: 'Entregue'
-        },
-        {
-          id: 'TNY-55012',
-          date: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(), 
-          total: 159.90,
-          status: 'Processando'
-        }
-      ];
-    }
-
-    return [];
-  }
-};
-
-// --- SERVIÇO OMNICHANNEL (META API ADAPTER) ---
 export const OmnichannelService = {
-  /**
-   * Envia mensagens via APIs oficiais da Meta.
-   */
   sendMessage: async (channel: ChannelSource, recipient: string, content: string): Promise<boolean> => {
-    console.log(`[OmnichannelService] Canal: ${channel} | Para: ${recipient}`);
-
     if (USE_MOCK) {
       await simulateNetwork(0.02);
-
-      if (channel === 'whatsapp') {
-        console.debug(`[SIMULAÇÃO META API] Enviando WhatsApp...`);
-      } else if (channel === 'instagram') {
-        console.debug(`[SIMULAÇÃO GRAPH API] Enviando Instagram...`);
-      }
-
       return true;
     }
-
     return false;
   }
 };

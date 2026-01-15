@@ -1,8 +1,9 @@
+
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { createClient } from '../../lib/supabase/client';
-import { UserProfile } from '../../types/index';
+import { createClient } from '../../lib/supabase/client.ts';
+import { UserProfile } from '../../types/index.ts';
 
 interface SupabaseContext {
   supabase: any;
@@ -24,9 +25,10 @@ export default function SupabaseProvider({ children }: { children: React.ReactNo
 
     const initializeAuth = async () => {
       try {
-        if (!supabase) throw new Error("Supabase client not initialized");
+        if (!supabase) return;
         
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const { data, error: sessionError } = await supabase.auth.getSession();
+        const session = data?.session;
         
         if (sessionError) throw sessionError;
 
@@ -46,15 +48,14 @@ export default function SupabaseProvider({ children }: { children: React.ReactNo
         console.warn("OlieHub: Operando em modo de visualização ou Supabase indisponível.");
       } finally {
         if (mounted) {
-          // Pequeno delay para suavizar a transição de carregamento
-          setTimeout(() => setIsLoading(false), 500);
+          setIsLoading(false);
         }
       }
     };
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mounted) {
         setUser(session?.user || null);
         if (!session) setProfile(null);
@@ -63,7 +64,9 @@ export default function SupabaseProvider({ children }: { children: React.ReactNo
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      if (authListener?.subscription) {
+        authListener.subscription.unsubscribe();
+      }
     };
   }, [supabase]);
 
@@ -74,12 +77,6 @@ export default function SupabaseProvider({ children }: { children: React.ReactNo
           <div className="w-24 h-24 border-2 border-[#C08A7D]/5 border-t-[#C08A7D] rounded-full animate-spin" />
           <div className="absolute inset-0 flex items-center justify-center">
             <span className="text-[#C08A7D] font-black text-2xl italic select-none">O</span>
-          </div>
-        </div>
-        <div className="mt-12 text-center space-y-2">
-          <p className="text-[10px] font-black uppercase tracking-[0.5em] text-stone-400 animate-pulse">Iniciando Concierge Digital</p>
-          <div className="w-32 h-0.5 bg-stone-100 mx-auto rounded-full overflow-hidden">
-             <div className="w-full h-full bg-[#C08A7D]/30 animate-progress-olie origin-left" />
           </div>
         </div>
       </div>

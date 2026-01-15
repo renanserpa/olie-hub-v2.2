@@ -1,4 +1,3 @@
-
 import { 
   MessageCircle, 
   Instagram, 
@@ -22,7 +21,7 @@ import {
   ProductionStage, 
   Product, 
   Conversation 
-} from '../types/index';
+} from '../types/index.ts';
 
 /**
  * CHANNEL_CONFIG

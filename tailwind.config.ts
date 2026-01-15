@@ -1,51 +1,36 @@
-import type { Config } from 'tailwindcss';
+import type { Config } from "tailwindcss";
 
 const config: Config = {
   content: [
-    './app/**/*.{js,ts,jsx,tsx,mdx}',
-    './components/**/*.{js,ts,jsx,tsx,mdx}',
-    './hooks/**/*.{js,ts,jsx,tsx,mdx}',
-    './lib/**/*.{js,ts,jsx,tsx,mdx}',
-    './index.tsx',
+    "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./lib/**/*.{js,ts,jsx,tsx,mdx}",
+    "./index.tsx",
   ],
   theme: {
     extend: {
       colors: {
-        olie: {
-          rose: '#C08A7D',
-          cream: '#FAF9F6',
-          stone: '#333333',
-          border: '#F2F0EA',
-          accent: '#A67569',
+        rose: { 
+          50: '#fff1f2', 
+          100: '#ffe4e6', 
+          500: '#f43f5e' 
         },
-        stone: {
-          50: '#FAF9F6',
-          100: '#F2F0EA',
-          800: '#333333',
+        olie: { 
+          300: '#DCC3BC', 
+          500: '#C08A7D', 
+          700: '#A67569',
+          900: '#4A3B38' 
+        },
+        stone: { 
+          50: '#F9F7F3', 
+          100: '#F0EBE5', 
+          800: '#44403C' 
         }
       },
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
         serif: ['Playfair Display', 'serif'],
       },
-      animation: {
-        'progress-olie': 'progress-loading 2s cubic-bezier(0.23, 1, 0.32, 1) infinite',
-        'float': 'float 6s ease-in-out infinite',
-      },
-      keyframes: {
-        'progress-loading': {
-          '0%': { width: '0%', left: '0' },
-          '50%': { width: '100%', left: '0' },
-          '100%': { width: '0%', left: '100%' },
-        },
-        'float': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-10px)' },
-        }
-      },
-      boxShadow: {
-        'olie': '0 20px 50px rgba(192, 138, 125, 0.1)',
-      }
     },
   },
   plugins: [],

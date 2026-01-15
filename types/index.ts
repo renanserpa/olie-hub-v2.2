@@ -90,8 +90,11 @@ export interface CartItem {
 export interface Order {
   id: string;
   date: string;
-  total: number;
-  status: 'Entregue' | 'Processando' | 'Cancelado' | 'Aguardando Pagamento' | 'Enviado';
+  total?: number;
+  price?: string;
+  status: string;
+  name?: string;
+  product?: string;
 }
 
 export interface Conversation {

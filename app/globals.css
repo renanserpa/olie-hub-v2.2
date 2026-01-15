@@ -1,62 +1,93 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  :root {
-    --background: #FAF9F6;
-    --foreground: #333333;
-    --olie-rose: #C08A7D;
-    --olie-border: #F2F0EA;
-  }
-
-  html {
-    @apply h-full antialiased;
-  }
-
   body {
-    @apply bg-stone-50 text-stone-800 h-full selection:bg-[#C08A7D]/20 selection:text-[#C08A7D];
+    @apply bg-stone-50 text-stone-800 antialiased min-h-screen overflow-x-hidden;
     font-family: 'Inter', sans-serif;
   }
-
   h1, h2, h3, h4, .font-serif {
     font-family: 'Playfair Display', serif;
-  }
-
-  /* Fix for SVG explosion and icons */
-  svg {
-    @apply max-w-full h-auto inline-block;
   }
 }
 
 @layer components {
+  /* Luxury Card Styles */
   .olie-card {
-    @apply bg-white border border-[#F2F0EA] rounded-[2.5rem] shadow-sm shadow-stone-200/40 transition-all duration-500 overflow-hidden;
+    @apply bg-white border border-[#F0EBE5] rounded-[2.5rem] shadow-sm shadow-stone-200/40 transition-all duration-500 overflow-hidden;
   }
-  
   .olie-card-hover {
     @apply hover:shadow-2xl hover:shadow-[#C08A7D]/10 hover:border-[#C08A7D]/20 hover:-translate-y-1;
   }
-
+  
+  /* Glassmorphism */
   .olie-glass {
     @apply bg-white/80 backdrop-blur-xl border border-white/20;
   }
-  
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+
+  /* Utility: Hide Scrollbar */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
 }
 
-@keyframes progress-loading {
-  0% { width: 0%; left: 0; }
-  50% { width: 100%; left: 0; }
-  100% { width: 0%; left: 100%; }
+/* 
+ * Animation Utilities Polyfill 
+ * Simulates tailwindcss-animate behavior for specific classes used in the app 
+ */
+@keyframes enter {
+  from { 
+    opacity: var(--tw-enter-opacity, 1); 
+    transform: translate3d(var(--tw-enter-translate-x, 0), var(--tw-enter-translate-y, 0), 0) scale3d(var(--tw-enter-scale, 1), var(--tw-enter-scale, 1), 1) rotate(var(--tw-enter-rotate, 0)); 
+  }
 }
 
-.animate-progress-olie {
-  animation: progress-loading 2s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+@layer utilities {
+  .animate-in {
+    animation-name: enter;
+    animation-duration: 300ms; /* Default duration */
+    --tw-enter-opacity: initial;
+    --tw-enter-scale: initial;
+    --tw-enter-rotate: initial;
+    --tw-enter-translate-x: initial;
+    --tw-enter-translate-y: initial;
+  }
+  
+  .fade-in {
+    --tw-enter-opacity: 0;
+  }
+  
+  .slide-in-from-bottom-2 {
+    --tw-enter-translate-y: 0.5rem;
+  }
+  
+  .slide-in-from-bottom-8 {
+    --tw-enter-translate-y: 2rem;
+  }
+
+  .slide-in-from-right-4 {
+    --tw-enter-translate-x: 1rem;
+  }
+
+  .slide-in-from-left-4 {
+    --tw-enter-translate-x: -1rem;
+  }
+
+  .zoom-in-95 {
+    --tw-enter-scale: 0.95;
+  }
+  
+  /* Helper to override duration */
+  .duration-300 {
+    animation-duration: 300ms;
+  }
+  .duration-1000 {
+    animation-duration: 1000ms;
+  }
 }

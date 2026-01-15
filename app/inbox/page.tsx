@@ -9,14 +9,18 @@ import { MainSidebar } from '../../components/layout/main-sidebar.tsx';
 import { useChat } from '../../hooks/use-chat.ts';
 import { MOCK_PRODUCTS } from '../../lib/constants.ts';
 import { OrderService } from '../../services/api.ts';
+import { SmartOrderModal } from '../../components/orders/smart-order-modal.tsx';
 
 export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   
-  // Layout State
+  // Layout State - Default to Left Open, Right Closed
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
+  const [rightPanelTab, setRightPanelTab] = useState<'crm' | 'orders' | 'catalog' | null>(null);
 
+  // Modal State
+  const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
   const { conversations = [], messages = [], sendMessage } = useChat(selectedId);
@@ -62,24 +66,39 @@ export default function InboxPage() {
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
-    // On desktop, we can auto-open context, or keep it as is. 
-    // Let's ensure left stays open and right opens if user wants context.
-    if (!isRightOpen && window.innerWidth > 1024) setIsRightOpen(true);
+    // Smart UX: On large screens, auto-open the right context panel if it's closed
+    if (!isRightOpen && window.innerWidth > 1280) setIsRightOpen(true);
+    setRightPanelTab(null); // Reset forced tab when switching users
+  };
+
+  const handleChatAction = (action: 'order' | 'catalog') => {
+    if (action === 'order') {
+      setIsOrderModalOpen(true);
+    } else if (action === 'catalog') {
+      if (!isRightOpen) setIsRightOpen(true);
+      setRightPanelTab('catalog');
+    }
+  };
+
+  const handleOrderComplete = (summary: string) => {
+    if (selectedId) {
+      sendMessage(summary);
+    }
   };
 
   return (
-    <div className="flex h-screen bg-[#FDFBF7] text-[#333333] overflow-hidden font-sans">
+    <div className="flex h-screen bg-[#FDFBF7] text-[#333333] overflow-hidden font-sans selection:bg-[#C08A7D] selection:text-white">
       {/* 0. Global Sidebar (Fixed) */}
       <MainSidebar />
 
       {/* 1. LEFT PANE - Conversation List (Collapsible) */}
+      {/* Uses cubic-bezier for a 'luxury' mechanical feel */}
       <div 
-        className={`shrink-0 bg-white border-r border-[#F2F0EA] transition-all duration-300 ease-in-out overflow-hidden relative ${
-          isLeftOpen ? 'w-[350px] opacity-100' : 'w-0 opacity-0 border-none'
+        className={`shrink-0 bg-white border-r border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
+          isLeftOpen ? 'w-[360px] opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-4 border-none'
         }`}
       >
-        {/* Inner container with fixed width prevents content squashing during transition */}
-        <div className="w-[350px] h-full absolute top-0 left-0">
+        <div className="w-[360px] h-full absolute top-0 left-0">
            <ConversationList 
               conversations={uiConversations as any} 
               selectedId={selectedId || ''} 
@@ -89,49 +108,35 @@ export default function InboxPage() {
       </div>
 
       {/* 2. CENTER PANE - Chat Window (Fluid) */}
-      <div className="flex-1 flex flex-col min-w-0 relative z-0 h-full transition-all duration-300">
-        {selectedId && activeConv ? (
-            <ChatWindow 
-              client={{ 
-                id: activeConv.customer?.id || activeConv.customer_id, 
-                name: activeConv.customer?.full_name || 'Cliente', 
-                avatar: (activeConv.customer?.full_name || 'C').charAt(0).toUpperCase(), 
-                source: activeConv.customer?.channel_source || 'whatsapp' 
-              }} 
-              messages={uiMessages as any} 
-              onSendMessage={sendMessage} 
-              
-              // Layout Controls
-              isLeftOpen={isLeftOpen}
-              onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
-              isRightOpen={isRightOpen}
-              onToggleRight={() => setIsRightOpen(!isRightOpen)}
-            />
-        ) : (
-          <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF7] relative">
-             <div className="absolute top-4 left-4">
-                {/* Toggle button even in empty state to recover the list if closed */}
-                {!isLeftOpen && (
-                  <button onClick={() => setIsLeftOpen(true)} className="p-2 bg-white border border-[#EBE8E0] rounded-xl text-stone-400 hover:text-[#C08A7D]">
-                    <span className="font-black text-xs uppercase">Abrir Menu</span>
-                  </button>
-                )}
-             </div>
-             <div className="w-24 h-24 bg-[#EBE8E0] rounded-full flex items-center justify-center mb-6 animate-pulse">
-                <div className="w-20 h-20 bg-[#FAF9F6] rounded-full" />
-             </div>
-             <p className="text-[10px] font-black uppercase tracking-[0.4em] text-stone-300">Selecione uma conversa</p>
-          </div>
-        )}
+      <div className="flex-1 flex flex-col min-w-0 relative z-10 h-full transition-all duration-300 bg-[#FDFBF7]">
+        <ChatWindow 
+          client={selectedId && activeConv ? { 
+            id: activeConv.customer?.id || activeConv.customer_id, 
+            name: activeConv.customer?.full_name || 'Cliente', 
+            avatar: (activeConv.customer?.full_name || 'C').charAt(0).toUpperCase(), 
+            source: activeConv.customer?.channel_source || 'whatsapp' 
+          } : null} 
+          messages={selectedId ? (uiMessages as any) : []} 
+          onSendMessage={sendMessage} 
+          
+          // Layout Controls
+          isLeftOpen={isLeftOpen}
+          onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
+          isRightOpen={isRightOpen}
+          onToggleRight={() => setIsRightOpen(!isRightOpen)}
+          
+          // Action Handler
+          onTriggerAction={handleChatAction}
+        />
       </div>
 
       {/* 3. RIGHT PANE - Action Panel (Collapsible) */}
       <div 
-         className={`shrink-0 bg-white border-l border-[#F2F0EA] transition-all duration-300 ease-in-out overflow-hidden relative ${
-          isRightOpen ? 'w-96 opacity-100' : 'w-0 opacity-0 border-none'
+         className={`shrink-0 bg-white border-l border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
+          isRightOpen ? 'w-[400px] opacity-100 translate-x-0' : 'w-0 opacity-0 translate-x-4 border-none'
          }`}
       >
-         <div className="w-96 h-full absolute top-0 right-0">
+         <div className="w-[400px] h-full absolute top-0 right-0">
             <ActionPanel 
               isOpen={true} 
               onClose={() => setIsRightOpen(false)}
@@ -144,9 +149,19 @@ export default function InboxPage() {
               } : null}
               catalog={MOCK_PRODUCTS}
               recentOrders={recentOrders}
+              forcedTab={rightPanelTab}
             />
          </div>
       </div>
+
+      {/* 4. MODALS */}
+      <SmartOrderModal 
+        isOpen={isOrderModalOpen}
+        onClose={() => setIsOrderModalOpen(false)}
+        clientName={activeConv?.customer?.full_name || 'Cliente'}
+        catalog={MOCK_PRODUCTS}
+        onOrderComplete={handleOrderComplete}
+      />
     </div>
   );
 }

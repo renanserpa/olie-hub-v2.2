@@ -1,39 +1,57 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, User, ShoppingBag, Package, ClipboardCopy, 
-  Truck, ChevronRight, Star, Clock 
+  Truck, ChevronRight, ChevronLeft, Star, Clock 
 } from 'lucide-react';
 import { Product, Order } from '../../types/index.ts';
 
 interface ActionPanelProps {
-  isOpen: boolean; // Kept for API compatibility
+  isOpen: boolean; 
   onClose: () => void;
   client: any;
   catalog: Product[];
   recentOrders: Order[];
+  forcedTab?: 'crm' | 'orders' | 'catalog' | null;
 }
 
 export const ActionPanel: React.FC<ActionPanelProps> = ({
-  onClose, client, catalog, recentOrders
+  onClose, client, catalog, recentOrders, forcedTab
 }) => {
   const [activeTab, setActiveTab] = useState<'crm' | 'orders' | 'catalog'>('crm');
+  
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 10;
+
+  // Watch for external tab changes
+  useEffect(() => {
+    if (forcedTab) {
+      setActiveTab(forcedTab);
+      setCurrentPage(1);
+    }
+  }, [forcedTab]);
 
   const handlePix = () => {
     alert("Gerando chave PIX para o pedido atual...");
-    // Future integration with OrderService
   };
 
   const handleFreight = () => {
     alert("Calculando frete via Correios/Melhor Envio...");
-    // Future integration with ShippingService
   };
+
+  // Pagination Logic
+  const totalPages = Math.ceil(catalog.length / ITEMS_PER_PAGE);
+  const currentProducts = catalog.slice(
+    (currentPage - 1) * ITEMS_PER_PAGE,
+    currentPage * ITEMS_PER_PAGE
+  );
 
   return (
     <div className="h-full bg-white flex flex-col overflow-hidden w-full">
-      {/* Header Fixo (h-16 to match ChatWindow) */}
+      {/* Header Fixo */}
       <div className="h-16 px-6 border-b border-[#F2F0EA] flex items-center justify-between shrink-0 bg-white z-20">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Contexto</span>
         <button onClick={onClose} className="p-2 hover:bg-stone-50 rounded-full text-stone-400 transition-colors">
@@ -50,7 +68,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => setActiveTab(tab.id as any)}
+            onClick={() => {
+              setActiveTab(tab.id as any);
+              setCurrentPage(1);
+            }}
             className={`flex-1 py-3 flex flex-col items-center gap-1 rounded-xl transition-all ${
               activeTab === tab.id 
                 ? 'bg-[#FAF9F6] text-[#C08A7D]' 
@@ -69,8 +90,6 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
         {/* CRM TAB */}
         {activeTab === 'crm' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-             
-             {/* Profile Card */}
              <div className="text-center mb-6">
                 <div className="w-16 h-16 mx-auto bg-[#C08A7D] rounded-[1.5rem] flex items-center justify-center text-white text-xl font-serif italic shadow-xl shadow-[#C08A7D]/20 mb-3">
                   {client?.avatar || 'C'}
@@ -138,19 +157,46 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
 
         {/* CATÁLOGO TAB */}
         {activeTab === 'catalog' && (
-           <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-right-4 duration-300">
-              {catalog.map(product => (
-                 <div key={product.id} className="group cursor-pointer">
-                    <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAF9F6] mb-2 relative">
-                       <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                       <button className="absolute bottom-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#C08A7D] shadow-md opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0">
-                          <ClipboardCopy size={14} />
-                       </button>
-                    </div>
-                    <h4 className="text-[10px] font-black uppercase tracking-wide text-stone-700 truncate">{product.name}</h4>
-                    <p className="text-[10px] text-stone-400">R$ {product.base_price.toFixed(2)}</p>
-                 </div>
-              ))}
+           <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="grid grid-cols-2 gap-3 flex-1 content-start">
+                  {currentProducts.map(product => (
+                     <div key={product.id} className="group cursor-pointer">
+                        <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAF9F6] mb-2 relative">
+                           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                           <button className="absolute bottom-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#C08A7D] shadow-md opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0">
+                              <ClipboardCopy size={14} />
+                           </button>
+                        </div>
+                        <h4 className="text-[10px] font-black uppercase tracking-wide text-stone-700 truncate">{product.name}</h4>
+                        <p className="text-[10px] text-stone-400">R$ {product.base_price.toFixed(2)}</p>
+                     </div>
+                  ))}
+              </div>
+
+              {/* Pagination Controls */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-4 mt-2 border-t border-[#F2F0EA] shrink-0">
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="p-2 rounded-xl border border-stone-100 text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:bg-transparent transition-all"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    
+                    <span className="text-[9px] font-black uppercase tracking-widest text-stone-300">
+                      Página {currentPage} de {totalPages}
+                    </span>
+
+                    <button 
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="p-2 rounded-xl border border-stone-100 text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:bg-transparent transition-all"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                </div>
+              )}
            </div>
         )}
       </div>

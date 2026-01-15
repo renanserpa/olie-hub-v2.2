@@ -7,7 +7,9 @@ import {
   Sparkles,
   Calendar,
   MessageCircle,
-  Scissors
+  Scissors,
+  Activity,
+  ChevronRight
 } from 'lucide-react';
 import { MainSidebar } from '../components/layout/main-sidebar.tsx';
 import { DashboardService } from '../services/api.ts';
@@ -59,7 +61,7 @@ export default function DashboardPage() {
           
           {/* Header Editorial */}
           <header className="space-y-6 animate-in fade-in slide-in-from-bottom-8 duration-1000">
-            <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-white border border-[#EBE8E0] rounded-full">
+            <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-white border border-[#EBE8E0] rounded-full shadow-sm">
               <Sparkles size={12} className="text-olie-500" />
               <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Briefing Diário</span>
             </div>
@@ -73,7 +75,7 @@ export default function DashboardPage() {
           </header>
 
           {/* Cards de Insight */}
-          <section className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-8 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-100 fill-mode-backwards">
             {/* Inbox Card */}
             <div onClick={() => navigateTo('/inbox')} className="bg-white p-10 rounded-[2rem] border border-[#F2F0EA] hover:border-olie-500/30 hover:shadow-2xl hover:shadow-olie-500/5 transition-all duration-700 cursor-pointer group">
               <div className="flex justify-between items-start mb-8">
@@ -123,18 +125,45 @@ export default function DashboardPage() {
           </section>
 
           {/* Editorial Activity Feed */}
-          <section className="space-y-10">
-            <h2 className="text-2xl font-serif italic text-[#1A1A1A]">Acontecimentos Recentes</h2>
-            <div className="border-l border-[#EBE8E0] pl-10 space-y-12">
-              {activity.map((item, i) => (
-                <div key={i} className="relative group">
-                  <div className="absolute -left-[45px] top-1.5 h-2.5 w-2.5 rounded-full bg-[#EBE8E0] border-2 border-[#FDFBF7] group-hover:bg-olie-500 transition-colors" />
-                  <p className="text-lg text-stone-600 font-light leading-relaxed">
-                    {item.text} <span className="font-serif italic text-[#1A1A1A] border-b border-olie-200">{item.highlight}</span>
-                  </p>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-stone-300 mt-2 block group-hover:text-olie-500 transition-colors">{item.time}</span>
-                </div>
-              ))}
+          <section className="space-y-10 animate-in fade-in slide-in-from-bottom-8 duration-1000 delay-200 fill-mode-backwards pb-20">
+            <div className="flex items-center justify-between">
+              <h2 className="text-2xl font-serif italic text-[#1A1A1A] flex items-center gap-3">
+                Acontecimentos Recentes
+                <div className="h-px w-12 bg-[#EBE8E0]" />
+              </h2>
+              <button className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-olie-500 transition-colors flex items-center gap-1">
+                Ver Tudo <ChevronRight size={12} />
+              </button>
+            </div>
+            
+            <div className="relative pl-4">
+              {/* Timeline Line */}
+              <div className="absolute left-[19px] top-2 bottom-6 w-px bg-gradient-to-b from-stone-200 via-stone-100 to-transparent" />
+              
+              <div className="space-y-6">
+                {activity.map((item, i) => (
+                  <div 
+                    key={i} 
+                    className="relative group pl-8 animate-in slide-in-from-bottom-2 fade-in duration-700"
+                    style={{ animationDelay: `${i * 150}ms` }}
+                  >
+                    {/* Timeline Marker */}
+                    <div className="absolute left-[15px] top-4 h-2.5 w-2.5 rounded-full border-2 border-[#FDFBF7] bg-stone-300 group-hover:bg-olie-500 group-hover:scale-125 transition-all duration-300 shadow-sm z-10 ring-4 ring-[#FDFBF7]" />
+                    
+                    {/* Activity Card */}
+                    <div className="bg-white p-5 rounded-2xl border border-[#F2F0EA] shadow-sm hover:shadow-lg hover:border-olie-500/20 hover:-translate-y-0.5 transition-all duration-300 cursor-default">
+                      <div className="flex justify-between items-start gap-4">
+                        <p className="text-base text-stone-600 font-light leading-relaxed">
+                          {item.text} <span className="font-serif italic font-medium text-[#1A1A1A] decoration-olie-200 decoration-1 underline-offset-4 group-hover:underline">{item.highlight}</span>
+                        </p>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-stone-300 whitespace-nowrap bg-stone-50 px-2 py-1 rounded-lg group-hover:text-olie-500 transition-colors">
+                          {item.time}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </section>
 

@@ -9,9 +9,9 @@ import SupabaseProvider from '../components/providers/supabase-provider.tsx';
  */
 export default function RootLayout({
   children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+}: {
+  children?: React.ReactNode;
+}) {
   return (
     <div className="min-h-screen bg-stone-50 text-stone-800 antialiased font-sans">
       <SupabaseProvider>

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
@@ -14,7 +13,7 @@ interface SupabaseContext {
 
 const Context = createContext<SupabaseContext | undefined>(undefined);
 
-export default function SupabaseProvider({ children }: { children: React.ReactNode }) {
+export default function SupabaseProvider({ children }: { children?: React.ReactNode }) {
   const [supabase] = useState(() => createClient());
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);

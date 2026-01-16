@@ -65,10 +65,10 @@ export const MainSidebar = () => {
             <button 
               key={item.path}
               onClick={() => navigateTo(item.path)}
-              className={`p-4 rounded-2xl transition-all group relative flex items-center justify-center w-14 h-14 ${
+              className={`p-4 rounded-2xl transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] group relative flex items-center justify-center w-14 h-14 ${
                 isActive 
-                  ? 'bg-[#C08A7D] text-white shadow-xl shadow-[#C08A7D]/20' 
-                  : 'text-stone-600 hover:text-stone-300 hover:bg-white/5'
+                  ? 'bg-[#C08A7D] text-white shadow-xl shadow-[#C08A7D]/20 scale-110 opacity-100' 
+                  : 'text-stone-600 hover:text-stone-300 hover:bg-white/5 hover:scale-105 opacity-60 hover:opacity-100'
               }`}
             >
               <Icon size={22} strokeWidth={isActive ? 2.5 : 1.5} />
@@ -83,12 +83,12 @@ export const MainSidebar = () => {
 
       {/* Footer Actions */}
       <div className="flex flex-col gap-8 mt-auto pt-8 border-t border-white/5 w-12 items-center">
-        <button onClick={() => navigateTo('/settings')} className={`transition-all ${activePath === '/settings' ? 'text-[#C08A7D]' : 'text-stone-600 hover:text-stone-300'}`}>
+        <button onClick={() => navigateTo('/settings')} className={`transition-all duration-300 hover:scale-110 ${activePath === '/settings' ? 'text-[#C08A7D] scale-110' : 'text-stone-600 hover:text-stone-300 opacity-60 hover:opacity-100'}`}>
           <Settings size={22} strokeWidth={1.5} />
         </button>
         <button 
           onClick={handleLogout}
-          className="text-stone-600 hover:text-rose-400 transition-all"
+          className="text-stone-600 hover:text-rose-400 transition-all duration-300 hover:scale-110 opacity-60 hover:opacity-100"
         >
           <LogOut size={22} strokeWidth={1.5} />
         </button>

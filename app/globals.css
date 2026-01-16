@@ -1,2 +1,62 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* Styles moved to index.html for Play CDN compatibility */
+@layer base {
+  /* Configuração estrutural para aplicação de tela cheia */
+  html, body, #root {
+    @apply h-full m-0 p-0 overflow-hidden;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    /* Identidade Visual Olie: Fundo, Texto e Tipografia Principal */
+    @apply bg-stone-50 text-stone-800 antialiased font-sans selection:bg-olie-500/20 selection:text-olie-900;
+  }
+
+  /* Tipografia Editorial para Títulos */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-serif text-olie-900 leading-tight tracking-tight;
+  }
+
+  /* Utilitários globais de legibilidade */
+  p {
+    @apply leading-relaxed;
+  }
+}
+
+@layer components {
+  /* Ocultar scrollbars mantendo funcionalidade */
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Componentes de Design System Olie */
+  .olie-card {
+    @apply bg-white border border-stone-200/60 rounded-4xl shadow-olie-soft transition-all duration-500 hover:shadow-olie-lg;
+  }
+
+  .olie-input {
+    @apply bg-white border border-stone-200 rounded-2xl px-5 py-3 outline-none 
+           focus:ring-4 focus:ring-olie-500/5 focus:border-olie-500/20 
+           transition-all placeholder:text-stone-300 text-sm font-medium;
+  }
+
+  .olie-button-primary {
+    @apply bg-olie-500 text-white rounded-2xl px-6 py-3 font-black uppercase 
+           text-[10px] tracking-widest shadow-lg shadow-olie-500/20 
+           hover:bg-olie-600 hover:scale-[1.02] active:scale-[0.98] transition-all;
+  }
+
+  .olie-glass {
+    @apply bg-white/70 backdrop-blur-xl border border-white/20 shadow-sm;
+  }
+
+  .panel-transition {
+    transition: all 600ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}

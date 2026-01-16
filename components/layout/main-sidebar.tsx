@@ -1,7 +1,7 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   MessageCircle, 
@@ -9,7 +9,8 @@ import {
   Users, 
   Settings, 
   LogOut,
-  Scissors
+  Scissors,
+  ChevronRight
 } from 'lucide-react';
 import { useSupabase } from '../providers/supabase-provider.tsx';
 
@@ -29,9 +30,9 @@ export const MainSidebar = () => {
     return window.location.hash.replace('#', '') || '/';
   };
 
-  const [activePath, setActivePath] = React.useState(getHashPath());
+  const [activePath, setActivePath] = useState(getHashPath());
 
-  React.useEffect(() => {
+  useEffect(() => {
     const handleHashChange = () => setActivePath(getHashPath());
     window.addEventListener('hashchange', handleHashChange);
     return () => window.removeEventListener('hashchange', handleHashChange);
@@ -42,21 +43,22 @@ export const MainSidebar = () => {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    if (supabase) await supabase.auth.signOut();
   };
 
   return (
-    <aside className="w-[100px] bg-[#111111] h-full flex flex-col items-center py-10 z-[100] shrink-0 border-r border-white/5">
-      {/* Brand Logo */}
+    <aside className="w-20 bg-stone-900 h-full flex flex-col items-center py-8 z-[100] shrink-0 border-r border-white/5 shadow-2xl">
+      {/* Brand Logo - More Minimalist Luxury */}
       <div 
         onClick={() => navigateTo('/')}
-        className="w-14 h-14 bg-[#C08A7D] rounded-2xl flex items-center justify-center text-white font-black text-2xl mb-10 shadow-xl shadow-[#C08A7D]/20 relative overflow-hidden group cursor-pointer hover:scale-105 transition-all duration-500"
+        className="w-12 h-12 bg-olie-500 rounded-2xl flex items-center justify-center text-white font-serif italic text-2xl mb-12 shadow-lg shadow-olie-500/20 cursor-pointer hover:scale-105 transition-all duration-500 group relative"
       >
-        <span className="relative italic font-serif">O</span>
+        <span>O</span>
+        <div className="absolute -right-2 -top-1 w-3 h-3 bg-white rounded-full border-2 border-stone-900 opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 flex flex-col gap-6 w-full items-center px-2 scrollbar-hide">
+      <nav className="flex-1 flex flex-col gap-6 w-full items-center">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = activePath === item.path || (item.path !== '/' && activePath.startsWith(item.path));
@@ -64,17 +66,24 @@ export const MainSidebar = () => {
             <button 
               key={item.path}
               onClick={() => navigateTo(item.path)}
-              className={`p-4 rounded-2xl transition-all duration-300 group relative flex items-center justify-center w-12 h-12 ${
+              className={`group relative flex items-center justify-center w-12 h-12 rounded-2xl transition-all duration-300 ${
                 isActive 
-                  ? 'bg-[#C08A7D] text-white shadow-lg shadow-[#C08A7D]/20 scale-110' 
+                  ? 'bg-olie-500 text-white shadow-lg shadow-olie-500/20 scale-110' 
                   : 'text-stone-500 hover:text-stone-300 hover:bg-white/5'
               }`}
             >
               <Icon size={20} strokeWidth={isActive ? 2.5 : 1.5} />
               
-              <div className="absolute left-[120%] px-4 py-2 bg-[#1A1A1A] text-white text-[9px] font-black uppercase tracking-widest rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 whitespace-nowrap z-[110] shadow-2xl border border-white/5">
+              {/* Tooltip */}
+              <div className="absolute left-[130%] px-4 py-2 bg-stone-800 text-white text-[9px] font-black uppercase tracking-[0.2em] rounded-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-all translate-x-2 group-hover:translate-x-0 whitespace-nowrap z-[110] shadow-2xl border border-white/5 flex items-center gap-2">
                 {item.name}
+                <ChevronRight size={10} className="text-olie-500" />
               </div>
+
+              {/* Active Indicator */}
+              {isActive && (
+                <div className="absolute -left-4 w-1 h-6 bg-olie-500 rounded-r-full shadow-lg shadow-olie-500/40" />
+              )}
             </button>
           );
         })}
@@ -84,13 +93,15 @@ export const MainSidebar = () => {
       <div className="flex flex-col gap-6 mt-auto pt-6 border-t border-white/5 w-12 items-center">
         <button 
           onClick={() => navigateTo('/settings')} 
-          className={`p-2 transition-all duration-300 hover:scale-110 ${activePath === '/settings' ? 'text-[#C08A7D]' : 'text-stone-500 hover:text-stone-300'}`}
+          className={`p-2 transition-all duration-300 hover:scale-110 ${activePath === '/settings' ? 'text-olie-500' : 'text-stone-500 hover:text-stone-300'}`}
+          title="Configurações"
         >
           <Settings size={20} strokeWidth={1.5} />
         </button>
         <button 
           onClick={handleLogout}
           className="p-2 text-stone-500 hover:text-rose-400 transition-all duration-300 hover:scale-110"
+          title="Sair"
         >
           <LogOut size={20} strokeWidth={1.5} />
         </button>

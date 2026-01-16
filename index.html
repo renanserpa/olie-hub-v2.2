@@ -6,19 +6,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OlieHub V2 Enterprise</title>
     
-    <!-- Fonts Preload -->
+    <!-- Preload critical fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet" />
     
-    <!-- 1. Tailwind Configuration -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" type="text/tailwindcss" href="app/globals.css">
+
+    <!-- Tailwind JIT Configuration sync with tailwind.config.ts for CDN runtime -->
     <script>
       window.tailwind = {
         config: {
           theme: {
             extend: {
               colors: {
-                background: '#FDFBF7',
+                background: '#FAF9F6',
                 olie: { 
                   50: '#FAF7F6',
                   100: '#F5EFED',
@@ -51,46 +54,6 @@
         }
       }
     </script>
-    
-    <!-- 2. Tailwind Engine -->
-    <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- 3. Integrated Global CSS -->
-    <style type="text/tailwindcss">
-      @layer base {
-        html, body, #root {
-          @apply h-full m-0 p-0 overflow-hidden bg-background;
-        }
-        body {
-          @apply text-stone-800 antialiased font-sans;
-        }
-        h1, h2, h3, h4 {
-          @apply font-serif text-olie-900 leading-tight;
-        }
-        
-        /* Custom Scrollbars */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { @apply bg-stone-200 rounded-full hover:bg-stone-300 transition-colors; }
-      }
-
-      @layer components {
-        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-        .scrollbar-hide::-webkit-scrollbar { display: none; }
-        
-        .olie-card {
-          @apply bg-white border border-stone-100 rounded-4xl shadow-olie-soft transition-all duration-500;
-        }
-        
-        .olie-input {
-          @apply bg-stone-50 border border-stone-100 rounded-2xl px-5 py-3 outline-none focus:ring-4 focus:ring-olie-500/5 focus:border-olie-500/20 transition-all placeholder:text-stone-300 text-sm font-medium;
-        }
-
-        .olie-button-primary {
-          @apply bg-olie-500 text-white rounded-2xl px-6 py-3 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-olie-500/20 hover:bg-olie-600 hover:scale-[1.02] active:scale-[0.98] transition-all;
-        }
-      }
-    </style>
 
     <script type="importmap">
 {
@@ -103,14 +66,15 @@
     "@supabase/ssr": "https://esm.sh/@supabase/ssr@^0.8.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.90.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "next/": "https://esm.sh/next@^16.1.2/",
     "tailwindcss": "https://esm.sh/tailwindcss@^4.1.18",
-    "next/": "https://esm.sh/next@^16.1.2/"
+    "@google/genai": "https://esm.sh/@google/genai@^1.37.0"
   }
 }
 </script>
 </head>
-<body>
-    <div id="root"></div>
+<body class="bg-background overflow-hidden h-full">
+    <div id="root" class="h-full"></div>
     <script type="module" src="index.tsx"></script>
 </body>
 </html>

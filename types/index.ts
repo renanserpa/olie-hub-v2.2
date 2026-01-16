@@ -18,14 +18,26 @@ export interface UserProfile {
   avatar_url?: string;
 }
 
-export interface IntegrationLog {
+export interface OrderTimelineEvent {
+  status: string;
+  date: string;
+  description: string;
+  icon?: string;
+}
+
+export interface Order {
   id: string;
-  service: 'TINY' | 'VNDA' | 'META' | string;
-  method: string;
-  endpoint: string;
-  status_code: number;
-  duration_ms: number;
-  timestamp: string;
+  date: string;
+  total?: number;
+  price?: string;
+  status: string;
+  name?: string;
+  product?: string;
+  customer_email?: string;
+  customer_phone?: string;
+  items: CartItem[];
+  timeline?: OrderTimelineEvent[];
+  tracking_code?: string;
 }
 
 export interface Client {
@@ -36,7 +48,7 @@ export interface Client {
   time: string;
   source: ChannelSource;
   unreadCount: number;
-  tags?: string[]; // Added for better UI context
+  tags?: string[];
 }
 
 export interface Customer {
@@ -87,16 +99,6 @@ export interface CartItem {
     hardware: string;
     personalization_text?: string;
   };
-}
-
-export interface Order {
-  id: string;
-  date: string;
-  total?: number;
-  price?: string;
-  status: string;
-  name?: string;
-  product?: string;
 }
 
 export interface Conversation {

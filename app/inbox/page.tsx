@@ -13,12 +13,12 @@ import { SmartOrderModal } from '../../components/orders/smart-order-modal.tsx';
 export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   
-  // Layout State
+  // Painéis Colapsáveis
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
-  const [rightPanelTab, setRightPanelTab] = useState<'crm' | 'orders' | 'catalog' | null>(null);
+  const [rightPanelTab, setRightPanelTab] = useState<'crm' | 'orders' | 'catalog' | 'ai' | 'studio' | null>(null);
 
-  // Modal State
+  // Modais e Dados de Apoio
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
@@ -28,133 +28,114 @@ export default function InboxPage() {
     sendMessage,
     loadMoreMessages,
     hasMore,
-    isFetchingHistory
+    isFetchingHistory,
+    updateConversationStatus,
+    transferConversation
   } = useChat(selectedId);
 
   const activeConv = useMemo(() => 
     (conversations || []).find(c => c.id === selectedId), 
   [selectedId, conversations]);
 
-  // Load orders when conversation is selected
+  // Sincronização de pedidos ao mudar cliente
   useEffect(() => {
     if (activeConv) {
         OrderService.getList().then(data => setRecentOrders(data.slice(0, 3)));
     }
   }, [activeConv]);
 
-  const safeTime = (dateStr: string | null | undefined) => {
-    if (!dateStr) return '--:--';
-    try {
-      const d = new Date(dateStr);
-      return isNaN(d.getTime()) ? '--:--' : d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch {
-      return '--:--';
-    }
-  };
+  // Responsividade Automática
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 1280) setIsRightOpen(false);
+      if (width < 1024) setIsLeftOpen(false);
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const uiConversations = useMemo(() => (conversations || []).map(c => ({
     id: c.id,
     name: c.customer?.full_name || 'Cliente Olie',
     avatar: (c.customer?.full_name || 'O').charAt(0).toUpperCase(),
     lastMessage: c.last_message || '...',
-    time: safeTime(c.last_message_at),
+    time: c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--',
     source: c.customer?.channel_source || 'whatsapp',
-    unreadCount: c.unread_count || 0
+    unreadCount: c.unread_count || 0,
+    tags: c.customer?.tags || [],
+    status: c.status
   })), [conversations]);
-
-  const uiMessages = useMemo(() => (messages || []).map(m => ({
-    id: m.id,
-    content: m.content || '',
-    direction: m.direction,
-    created_at: m.created_at,
-    type: m.type
-  })), [messages]);
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
-    
-    // Smart Responsiveness
-    if (window.innerWidth >= 1280 && !isRightOpen) {
-        setIsRightOpen(true);
-    }
-    if (window.innerWidth < 768) {
-        setIsLeftOpen(false);
-    }
-    
-    setRightPanelTab(null);
+    if (window.innerWidth < 768) setIsLeftOpen(false);
   };
 
   const handleChatAction = (action: 'order' | 'catalog') => {
     if (action === 'order') {
       setIsOrderModalOpen(true);
     } else if (action === 'catalog') {
-      if (!isRightOpen) setIsRightOpen(true);
+      setIsRightOpen(true);
       setRightPanelTab('catalog');
-    }
-  };
-
-  const handleOrderComplete = (summary: string) => {
-    if (selectedId) {
-      sendMessage(summary);
     }
   };
 
   return (
     <>
-      <div className="flex-1 flex overflow-hidden relative h-full">
-
-        {/* LEFT PANE */}
-        <div 
-          className={`shrink-0 bg-white border-r border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
-            isLeftOpen ? 'w-80 opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-10 border-none'
-          }`}
+      <div className="flex-1 flex h-full overflow-hidden bg-white relative">
+        <aside 
+          className={`
+            shrink-0 h-full bg-white z-30 relative overflow-hidden
+            transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+            ${isLeftOpen ? 'w-[360px] border-r border-stone-100' : 'w-0 border-r-0'}
+          `}
         >
-          <div className="w-80 h-full absolute top-0 right-0">
+          <div className="w-[360px] h-full">
              <ConversationList 
                 conversations={uiConversations as any} 
                 selectedId={selectedId || ''} 
                 onSelect={handleSelectConversation} 
              />
           </div>
-        </div>
+        </aside>
 
-        {/* CENTER PANE */}
-        <div className="flex-1 flex flex-col min-w-0 relative z-10 h-full bg-[#FDFBF7] shadow-xl shadow-stone-200/20">
+        <main className="flex-1 min-w-0 flex flex-col h-full bg-stone-50 relative z-10 overflow-hidden">
           <ChatWindow 
             client={selectedId && activeConv ? { 
               id: activeConv.customer?.id || activeConv.customer_id, 
               name: activeConv.customer?.full_name || 'Cliente', 
               avatar: (activeConv.customer?.full_name || 'C').charAt(0).toUpperCase(), 
-              source: activeConv.customer?.channel_source || 'whatsapp' 
+              source: activeConv.customer?.channel_source || 'whatsapp',
+              status: activeConv.status,
+              assignee_id: activeConv.assignee_id
             } : null} 
-            messages={selectedId ? (uiMessages as any) : []} 
+            messages={messages as any} 
             onSendMessage={sendMessage} 
-            
-            // Layout Props
             isLeftOpen={isLeftOpen}
             onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
             isRightOpen={isRightOpen}
             onToggleRight={() => setIsRightOpen(!isRightOpen)}
-            
-            // Infinite Scroll Props
             onLoadMore={loadMoreMessages}
             hasMore={hasMore}
             isLoadingHistory={isFetchingHistory}
-
-            // Actions
             onTriggerAction={handleChatAction}
+            onUpdateStatus={(status) => selectedId && updateConversationStatus(selectedId, status)}
+            onTransfer={(agentId) => selectedId && transferConversation(selectedId, agentId)}
           />
-        </div>
+        </main>
 
-        {/* RIGHT PANE */}
-        <div 
-           className={`shrink-0 bg-white border-l border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
-            isRightOpen ? 'w-96 opacity-100 translate-x-0' : 'w-0 opacity-0 translate-x-10 border-none'
-           }`}
+        <aside 
+          className={`
+            shrink-0 h-full bg-white z-30 relative overflow-hidden
+            transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
+            ${isRightOpen ? 'w-[400px] border-l border-stone-100' : 'w-0 border-l-0'}
+          `}
         >
-           <div className="w-96 h-full absolute top-0 left-0">
+           <div className="w-[400px] h-full">
               <ActionPanel 
-                isOpen={true} 
+                isOpen={isRightOpen} 
                 onClose={() => setIsRightOpen(false)}
                 client={activeConv?.customer ? {
                     name: activeConv.customer.full_name,
@@ -165,11 +146,11 @@ export default function InboxPage() {
                 } : null}
                 catalog={MOCK_PRODUCTS}
                 recentOrders={recentOrders}
+                messages={messages}
                 forcedTab={rightPanelTab}
               />
            </div>
-        </div>
-
+        </aside>
       </div>
 
       <SmartOrderModal 
@@ -177,7 +158,7 @@ export default function InboxPage() {
         onClose={() => setIsOrderModalOpen(false)}
         clientName={activeConv?.customer?.full_name || 'Cliente'}
         catalog={MOCK_PRODUCTS}
-        onOrderComplete={handleOrderComplete}
+        onOrderComplete={(summary) => selectedId && sendMessage(summary)}
       />
     </>
   );

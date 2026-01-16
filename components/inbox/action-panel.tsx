@@ -4,10 +4,12 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, ShoppingBag, Package, ClipboardCopy, 
-  Truck, ChevronRight, ChevronLeft, Star, Clock,
-  Eye, Send, CheckCircle2
+  Truck, ChevronRight, Star, Eye, Send, Sparkles, 
+  BrainCircuit, MessageSquareQuote, Loader2, ThumbsUp, 
+  ThumbsDown, Palette, Image as ImageIcon
 } from 'lucide-react';
-import { Product, Order } from '../../types/index.ts';
+import { Product, Order, Message } from '../../types/index.ts';
+import { AIService } from '../../services/api.ts';
 
 interface ActionPanelProps {
   isOpen: boolean; 
@@ -15,290 +17,313 @@ interface ActionPanelProps {
   client: any;
   catalog: Product[];
   recentOrders: Order[];
-  forcedTab?: 'crm' | 'orders' | 'catalog' | null;
+  messages: Message[];
+  forcedTab?: 'crm' | 'orders' | 'catalog' | 'ai' | 'studio' | null;
 }
 
-export const ActionPanel: React.FC<ActionPanelProps> = ({
-  onClose, client, catalog, recentOrders, forcedTab
-}) => {
-  const [activeTab, setActiveTab] = useState<'crm' | 'orders' | 'catalog'>('crm');
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
-  
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 10;
+const MATERIAL_CHIPS = [
+  { label: 'Couro Croco', prompt: 'Italian Croco Leather texture' },
+  { label: 'Liso Nobre', prompt: 'Premium smooth calfskin leather' },
+  { label: 'Floater', prompt: 'Pebbled floater leather texture' },
+  { label: 'Matelassê', prompt: 'Quilted leather pattern' },
+  { label: 'Dourado 18k', prompt: '18k gold polished hardware' },
+  { label: 'Prata Nobre', prompt: 'Brushed silver hardware' },
+];
 
-  // Watch for external tab changes
+export const ActionPanel: React.FC<ActionPanelProps> = ({
+  onClose, client, catalog, recentOrders, messages, forcedTab
+}) => {
+  const [activeTab, setActiveTab] = useState<'crm' | 'orders' | 'catalog' | 'ai' | 'studio'>('crm');
+  const [aiInsight, setAiInsight] = useState<any>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Visual Studio State
+  const [studioPrompt, setStudioPrompt] = useState('');
+  const [generatedImage, setGeneratedImage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
+  
   useEffect(() => {
     if (forcedTab) {
-      setActiveTab(forcedTab);
-      setCurrentPage(1);
+      setActiveTab(forcedTab as any);
     }
   }, [forcedTab]);
 
-  const handlePix = () => {
-    alert("Gerando chave PIX para o pedido atual...");
+  const handleRunAI = async () => {
+    if (!client || messages.length === 0) return;
+    setIsAnalyzing(true);
+    try {
+      const insight = await AIService.analyzeConversation(messages, client.name);
+      setAiInsight(insight);
+      if (insight?.suggested_skus?.[0]) {
+        setStudioPrompt(`Bolsa ${insight.suggested_skus[0]} com acabamento premium.`);
+      }
+    } catch (err) {
+      console.error("AI Analysis failed", err);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const handleFreight = () => {
-    alert("Calculando frete via Correios/Melhor Envio...");
+  const addChipToPrompt = (chip: string) => {
+    setStudioPrompt(prev => prev ? `${prev}, com ${chip.toLowerCase()}` : `Bolsa em ${chip.toLowerCase()}`);
   };
 
-  const handleSendProduct = () => {
-     alert(`Produto ${quickViewProduct?.name} enviado para o chat.`);
-     setQuickViewProduct(null);
+  const handleGeneratePreview = async () => {
+    if (!studioPrompt.trim()) return;
+    setIsGenerating(true);
+    setGeneratedImage(null);
+    try {
+      const img = await AIService.generateProductPreview(studioPrompt);
+      setGeneratedImage(img);
+    } catch (err) {
+      console.error("Preview generation failed", err);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
-  // Pagination Logic
-  const totalPages = Math.ceil(catalog.length / ITEMS_PER_PAGE);
-  const currentProducts = catalog.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
-  );
+  const sentimentColors: any = {
+    'Neutro': 'text-stone-400 bg-stone-50',
+    'Entusiasmado': 'text-emerald-600 bg-emerald-50',
+    'Frustrado': 'text-rose-600 bg-rose-50',
+    'Indefinido': 'text-stone-300 bg-stone-50'
+  };
 
   return (
     <div className="h-full bg-white flex flex-col overflow-hidden w-full relative">
-      {/* Header Fixo */}
       <div className="h-16 px-6 border-b border-[#F2F0EA] flex items-center justify-between shrink-0 bg-white z-20">
-        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Contexto</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Atendimento Premium</span>
         <button onClick={onClose} className="p-2 hover:bg-stone-50 rounded-full text-stone-400 transition-colors">
           <X size={16} />
         </button>
       </div>
 
-      {/* Tabs Navigation */}
-      <div className="flex p-2 bg-white border-b border-[#F2F0EA] shrink-0">
+      <div className="flex p-2 bg-white border-b border-[#F2F0EA] shrink-0 overflow-x-auto scrollbar-hide">
         {[
+          { id: 'ai', icon: BrainCircuit, label: 'Concierge' },
+          { id: 'studio', icon: Palette, label: 'Studio' },
           { id: 'crm', icon: User, label: 'CRM' },
           { id: 'orders', icon: ShoppingBag, label: 'Pedidos' },
           { id: 'catalog', icon: Package, label: 'Catálogo' },
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => {
-              setActiveTab(tab.id as any);
-              setCurrentPage(1);
-            }}
-            className={`flex-1 py-3 flex flex-col items-center gap-1 rounded-xl transition-all ${
+            onClick={() => setActiveTab(tab.id as any)}
+            className={`flex-1 min-w-[65px] py-3 flex flex-col items-center gap-1 rounded-xl transition-all ${
               activeTab === tab.id 
-                ? 'bg-[#FAF9F6] text-[#C08A7D]' 
+                ? 'bg-olie-50 text-olie-600' 
                 : 'text-stone-300 hover:text-stone-500 hover:bg-stone-50'
             }`}
           >
             <tab.icon size={18} strokeWidth={activeTab === tab.id ? 2.5 : 2} />
-            <span className="text-[9px] font-black uppercase tracking-widest">{tab.label}</span>
+            <span className="text-[8px] font-black uppercase tracking-widest">{tab.label}</span>
           </button>
         ))}
       </div>
 
-      {/* Tab Content Area */}
-      <div className="flex-1 overflow-y-auto p-6 scrollbar-hide bg-[#FFFFFF]">
+      <div className="flex-1 overflow-y-auto p-6 scrollbar-hide bg-white">
         
+        {/* STUDIO TAB - ENHANCED */}
+        {activeTab === 'studio' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+            <div className="p-8 rounded-[2.5rem] bg-stone-900 text-white shadow-xl relative overflow-hidden group border border-white/5">
+              <ImageIcon className="absolute -right-4 -top-4 w-20 h-20 opacity-10 rotate-12" />
+              <h3 className="text-xl font-serif italic mb-2">Visual Studio</h3>
+              <p className="text-[9px] font-medium text-stone-400 uppercase tracking-widest mb-6">Prototipe o desejo do cliente</p>
+              
+              <div className="space-y-4">
+                 <textarea 
+                    value={studioPrompt}
+                    onChange={e => setStudioPrompt(e.target.value)}
+                    placeholder="Descreva a peça ou use os atalhos abaixo..."
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl p-5 text-xs outline-none focus:ring-2 focus:ring-olie-500/50 transition-all h-28 resize-none placeholder:text-stone-600"
+                 />
+
+                 <div className="flex flex-wrap gap-2">
+                    {MATERIAL_CHIPS.map(chip => (
+                       <button 
+                        key={chip.label}
+                        onClick={() => addChipToPrompt(chip.label)}
+                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[8px] font-black uppercase tracking-widest hover:bg-white/10 hover:border-olie-500 transition-all text-stone-400 hover:text-white"
+                       >
+                          + {chip.label}
+                       </button>
+                    ))}
+                 </div>
+
+                 <button 
+                    onClick={handleGeneratePreview}
+                    disabled={isGenerating || !studioPrompt.trim()}
+                    className="w-full bg-olie-500 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-lg shadow-olie-500/20 flex items-center justify-center gap-2 hover:bg-olie-600 transition-all disabled:opacity-50 active:scale-95"
+                 >
+                    {isGenerating ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />}
+                    {isGenerating ? "Renderizando..." : "Gerar Visualização"}
+                 </button>
+              </div>
+            </div>
+
+            {generatedImage && (
+              <div className="space-y-6 animate-in zoom-in-95 duration-500">
+                <div className="aspect-square rounded-[2.5rem] overflow-hidden border border-stone-100 shadow-olie-soft bg-stone-50 group relative">
+                  <img src={generatedImage} className="w-full h-full object-cover" alt="AI Generated Preview" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-4">
+                     <button className="w-12 h-12 rounded-full bg-white text-stone-900 flex items-center justify-center shadow-xl hover:scale-110 transition-transform">
+                        <Eye size={20} />
+                     </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button className="py-4 bg-stone-50 text-stone-600 rounded-2xl text-[9px] font-black uppercase tracking-widest border border-stone-100 hover:bg-stone-100 transition-all">Baixar</button>
+                  <button className="py-4 bg-olie-900 text-white rounded-2xl text-[9px] font-black uppercase tracking-widest shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-2">
+                     <Send size={12} /> Enviar Chat
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* AI CONCIERGE TAB */}
+        {activeTab === 'ai' && (
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-20">
+             <div className="p-8 rounded-[2.5rem] bg-gradient-to-br from-olie-500 to-olie-700 text-white shadow-olie-lg relative overflow-hidden group">
+                <Sparkles className="absolute -right-4 -top-4 w-24 h-24 opacity-10 rotate-12" />
+                <h3 className="text-xl font-serif italic mb-2">Olie AI</h3>
+                <p className="text-[10px] font-medium text-white/70 mb-8 uppercase tracking-widest">Inteligência de Atendimento</p>
+                <button 
+                  onClick={handleRunAI}
+                  disabled={isAnalyzing}
+                  className="w-full bg-white text-olie-700 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center justify-center gap-2 hover:bg-olie-50 transition-all disabled:opacity-50 active:scale-95"
+                >
+                  {isAnalyzing ? <Loader2 size={16} className="animate-spin" /> : <BrainCircuit size={16} />}
+                  {isAnalyzing ? "Mapeando..." : "Analisar Cliente"}
+                </button>
+             </div>
+
+             {aiInsight && (
+               <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                  <div className="p-6 bg-stone-50 rounded-3xl border border-stone-100">
+                    <div className="flex items-center gap-2 mb-4">
+                       <MessageSquareQuote size={14} className="text-olie-500" />
+                       <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Sumário da Intenção</span>
+                    </div>
+                    <p className="text-sm text-stone-700 leading-relaxed italic font-serif">"{aiInsight.summary}"</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="p-5 bg-white border border-stone-100 rounded-3xl text-center">
+                       <p className="text-[9px] font-black uppercase tracking-widest text-stone-300 mb-2">Sentimento</p>
+                       <p className={`text-xs font-bold px-3 py-1 rounded-full inline-block ${sentimentColors[aiInsight.sentiment] || sentimentColors['Indefinido']}`}>
+                         {aiInsight.sentiment}
+                       </p>
+                    </div>
+                    <div className="p-5 bg-white border border-stone-100 rounded-3xl text-center">
+                       <p className="text-[9px] font-black uppercase tracking-widest text-stone-300 mb-2">Estilo</p>
+                       <p className="text-xs font-bold text-olie-600">{aiInsight.style_profile || 'Minimalista'}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-6 bg-olie-900 text-white rounded-[2rem] shadow-xl relative overflow-hidden group">
+                     <div className="absolute inset-0 bg-olie-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                     <p className="text-[9px] font-black uppercase tracking-[0.3em] text-stone-500 mb-4">Recomendação Estratégica</p>
+                     <p className="text-sm font-serif italic mb-6 leading-relaxed text-stone-200">{aiInsight.next_step}</p>
+                     <button 
+                      onClick={() => { setActiveTab('studio'); if(aiInsight.suggested_skus?.[0]) setStudioPrompt(`Bolsa ${aiInsight.suggested_skus[0]} customizada estilo ${aiInsight.style_profile}`); }}
+                      className="w-full py-3 bg-white/10 hover:bg-white/20 border border-white/10 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all"
+                     >
+                       Customizar Sugestão no Studio
+                     </button>
+                  </div>
+               </div>
+             )}
+          </div>
+        )}
+
         {/* CRM TAB */}
         {activeTab === 'crm' && (
-          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-             <div className="text-center mb-6">
-                <div className="w-16 h-16 mx-auto bg-[#C08A7D] rounded-[1.5rem] flex items-center justify-center text-white text-xl font-serif italic shadow-xl shadow-[#C08A7D]/20 mb-3">
+          <div className="space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+             <div className="text-center pt-4">
+                <div className="w-20 h-20 mx-auto bg-olie-500 rounded-[2rem] flex items-center justify-center text-white text-3xl font-serif italic shadow-olie-lg mb-4">
                   {client?.avatar || 'C'}
                 </div>
-                <h2 className="text-lg font-serif italic text-[#333333]">{client?.name || 'Cliente Olie'}</h2>
-                <div className="flex justify-center gap-1 mt-2 flex-wrap">
+                <h2 className="text-2xl font-serif italic text-stone-800">{client?.name || 'Cliente Olie'}</h2>
+                <div className="flex justify-center gap-1.5 mt-4 flex-wrap px-4">
                    {client?.tags?.map((tag: string) => (
-                     <span key={tag} className="px-2 py-0.5 bg-stone-50 border border-stone-100 rounded text-[9px] font-black uppercase tracking-wider text-stone-400">{tag}</span>
-                   )) || <span className="text-[9px] text-stone-300">Sem etiquetas</span>}
+                     <span key={tag} className="px-3 py-1 bg-stone-50 border border-stone-100 rounded-full text-[9px] font-black uppercase tracking-wider text-stone-400">{tag}</span>
+                   )) || <span className="text-[9px] text-stone-300 italic">Sem etiquetas de CRM</span>}
                 </div>
              </div>
-
-             <div className="p-4 bg-[#FAF9F6] rounded-2xl space-y-4 border border-[#F2F0EA]">
-                <div className="flex items-center gap-3 text-stone-600">
-                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#C08A7D] shadow-sm"><Star size={14}/></div>
-                   <div className="flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-stone-300">LTV Total</p>
-                      <p className="font-serif italic font-bold">R$ {client?.ltv || '0,00'}</p>
+             <div className="grid grid-cols-1 gap-4">
+                <div className="p-6 bg-stone-50 rounded-3xl border border-stone-100 flex items-center justify-between group hover:bg-white transition-colors">
+                   <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-2xl bg-white flex items-center justify-center text-olie-500 shadow-sm group-hover:bg-olie-500 group-hover:text-white transition-all"><Star size={16}/></div>
+                      <div>
+                         <p className="text-[9px] font-black uppercase tracking-widest text-stone-300">Valor Vitalício (LTV)</p>
+                         <p className="text-lg font-serif italic font-bold text-stone-800">R$ {client?.ltv?.toLocaleString('pt-BR', { minimumFractionDigits: 2 }) || '0,00'}</p>
+                      </div>
                    </div>
+                   <ChevronRight size={18} className="text-stone-200" />
                 </div>
-                <div className="flex items-center gap-3 text-stone-600">
-                   <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-[#C08A7D] shadow-sm"><Clock size={14}/></div>
-                   <div className="flex-1">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-stone-300">Desde</p>
-                      <p className="font-serif italic font-bold">12 Out, 2023</p>
-                   </div>
-                </div>
-             </div>
-
-             <div className="space-y-2">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300 pl-2">Notas</p>
-                <textarea 
-                  className="w-full h-24 bg-[#FAF9F6] border border-[#F2F0EA] rounded-2xl p-4 text-xs text-stone-600 focus:outline-none focus:border-[#C08A7D]/30 resize-none placeholder:text-stone-300"
-                  placeholder="Observações do cliente..."
-                />
              </div>
           </div>
         )}
 
         {/* PEDIDOS TAB */}
         {activeTab === 'orders' && (
-           <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
-              <button className="w-full py-3 border-2 border-dashed border-[#F2F0EA] rounded-2xl text-stone-400 hover:border-[#C08A7D]/30 hover:text-[#C08A7D] hover:bg-[#FAF9F6] transition-all flex items-center justify-center gap-2 group">
-                 <ShoppingBag size={16} />
-                 <span className="text-[10px] font-black uppercase tracking-widest">Novo Pedido</span>
-              </button>
-
-              {recentOrders.map(order => (
-                 <div key={order.id} className="p-4 bg-white border border-[#F2F0EA] rounded-2xl hover:shadow-lg transition-all group cursor-pointer">
-                    <div className="flex justify-between items-start mb-2">
-                       <span className="font-serif italic font-black text-stone-800">#{order.id}</span>
-                       <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-widest ${
-                          order.status === 'Entregue' ? 'bg-emerald-50 text-emerald-600' : 'bg-stone-50 text-stone-400'
-                       }`}>{order.status}</span>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+             <div className="flex items-center justify-between px-2">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Histórico de Pedidos</h3>
+                <span className="text-[9px] font-bold text-stone-300 bg-stone-50 px-2 py-0.5 rounded-lg">{recentOrders.length} total</span>
+             </div>
+             <div className="space-y-4">
+               {recentOrders.length > 0 ? recentOrders.map((order: any) => (
+                 <div key={order.id} className="p-5 bg-white border border-stone-100 rounded-3xl hover:shadow-olie-soft hover:border-olie-500/20 transition-all cursor-pointer group">
+                    <div className="flex justify-between items-start mb-4">
+                      <div className="px-3 py-1 bg-olie-50 rounded-lg border border-olie-100">
+                         <span className="text-[10px] font-black text-olie-700">#{order.id}</span>
+                      </div>
+                      <span className="text-[9px] font-black text-stone-300 uppercase">{order.date}</span>
                     </div>
-                    <p className="text-xs text-stone-500 mb-2">{order.date}</p>
-                    <div className="flex justify-between items-center border-t border-[#F2F0EA] pt-2 mt-2">
-                       <span className="font-black text-xs text-[#C08A7D]">{order.price || `R$ ${order.total}`}</span>
-                       <ChevronRight size={14} className="text-stone-300 group-hover:translate-x-1 transition-transform" />
+                    <p className="text-sm font-bold text-stone-800 mb-2 group-hover:text-olie-500 transition-colors">{order.product}</p>
+                    <div className="flex justify-between items-center pt-4 border-t border-stone-50">
+                      <span className="text-sm font-black text-stone-800">{order.price}</span>
+                      <div className="flex items-center gap-2 text-[9px] font-black uppercase tracking-widest text-stone-300 group-hover:text-stone-500 transition-all">
+                         Detalhes <ChevronRight size={12} />
+                      </div>
                     </div>
                  </div>
-              ))}
-           </div>
+               )) : <div className="text-center py-20 opacity-30 italic text-sm">Nenhum pedido registrado</div>}
+             </div>
+          </div>
         )}
 
-        {/* CATÁLOGO TAB */}
+        {/* CATALOG TAB */}
         {activeTab === 'catalog' && (
-           <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="grid grid-cols-2 gap-3 flex-1 content-start">
-                  {currentProducts.map(product => (
-                     <div key={product.id} className="group cursor-pointer" onClick={() => setQuickViewProduct(product)}>
-                        <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAF9F6] mb-2 relative">
-                           <img 
-                              src={product.image_url} 
-                              alt={product.name} 
-                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
-                           />
-                           
-                           {/* Hover Overlay */}
-                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                              <div className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-stone-800 shadow-xl transform scale-50 group-hover:scale-100 transition-all duration-300">
-                                 <Eye size={18} />
-                              </div>
-                           </div>
-                        </div>
-                        <h4 className="text-[10px] font-black uppercase tracking-wide text-stone-700 truncate">{product.name}</h4>
-                        <p className="text-[10px] text-stone-400">R$ {product.base_price.toFixed(2)}</p>
-                     </div>
-                  ))}
-              </div>
-
-              {/* Pagination Controls */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between pt-4 mt-2 border-t border-[#F2F0EA] shrink-0">
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="p-2 rounded-xl border border-stone-100 text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:bg-transparent transition-all"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    
-                    <span className="text-[9px] font-black uppercase tracking-widest text-stone-300">
-                      Página {currentPage} de {totalPages}
-                    </span>
-
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-2 rounded-xl border border-stone-100 text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 disabled:opacity-30 disabled:hover:text-stone-400 disabled:hover:bg-transparent transition-all"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
+          <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-10">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400 px-2">Catálogo Express</h3>
+            <div className="grid grid-cols-1 gap-4">
+              {catalog.map(product => (
+                <div key={product.id} className="p-4 bg-white border border-stone-100 rounded-[2rem] flex gap-4 hover:border-olie-500/20 hover:shadow-olie-soft transition-all group cursor-pointer">
+                   <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-stone-50">
+                      <img src={product.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                   </div>
+                   <div className="flex-1 min-w-0 flex flex-col justify-center">
+                      <p className="text-xs font-bold text-stone-800 truncate group-hover:text-olie-500 transition-colors">{product.name}</p>
+                      <p className="text-[10px] font-black text-olie-600 mt-1 uppercase">R$ {product.base_price.toFixed(2)}</p>
+                   </div>
+                   <button 
+                    onClick={() => { setActiveTab('studio'); setStudioPrompt(`Prévia da ${product.name} em couro clássico.`); }}
+                    className="w-10 h-10 rounded-2xl bg-stone-50 text-stone-300 hover:text-olie-500 hover:bg-olie-50 transition-all self-center flex items-center justify-center"
+                   >
+                      <Palette size={16} />
+                   </button>
                 </div>
-              )}
-           </div>
+              ))}
+            </div>
+          </div>
         )}
+
       </div>
-
-      {/* Quick Actions Footer */}
-      <div className="p-6 border-t border-[#F2F0EA] bg-[#FAF9F6] space-y-3 shrink-0">
-         <div className="grid grid-cols-2 gap-3">
-            <button 
-              onClick={handlePix}
-              className="py-3 bg-emerald-500 text-white rounded-xl flex items-center justify-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 active:scale-95"
-            >
-               <span className="text-[10px] font-black uppercase tracking-widest">PIX</span>
-            </button>
-            <button 
-              onClick={handleFreight}
-              className="py-3 bg-white border border-[#F2F0EA] text-stone-600 rounded-xl flex items-center justify-center gap-2 hover:bg-stone-50 transition-colors active:scale-95"
-            >
-               <Truck size={14} />
-               <span className="text-[10px] font-black uppercase tracking-widest">Frete</span>
-            </button>
-         </div>
-      </div>
-
-      {/* QUICK VIEW MODAL (Fixed Overlay) */}
-      {quickViewProduct && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-           {/* Backdrop */}
-           <div 
-             className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-300"
-             onClick={() => setQuickViewProduct(null)}
-           />
-           
-           {/* Modal Content */}
-           <div className="relative bg-white rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
-              <button 
-                 onClick={() => setQuickViewProduct(null)}
-                 className="absolute top-4 right-4 w-8 h-8 bg-white/50 backdrop-blur-md rounded-full flex items-center justify-center text-stone-600 z-10 hover:bg-white transition-colors"
-              >
-                 <X size={16} />
-              </button>
-
-              <div className="h-64 bg-stone-100 relative">
-                 <img src={quickViewProduct.image_url} className="w-full h-full object-cover" />
-                 <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
-                    {quickViewProduct.sku_base}
-                 </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                 <div>
-                    <h3 className="text-2xl font-serif italic text-[#1A1A1A] mb-1">{quickViewProduct.name}</h3>
-                    <p className="text-stone-400 font-medium text-lg">R$ {quickViewProduct.base_price.toFixed(2)}</p>
-                 </div>
-
-                 <div className="space-y-3">
-                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Cores Disponíveis</p>
-                    <div className="flex gap-2">
-                       {quickViewProduct.options.colors.map(color => (
-                          <div 
-                             key={color.value} 
-                             className="w-6 h-6 rounded-full border border-stone-200 shadow-sm"
-                             style={{ backgroundColor: color.hex }}
-                             title={color.label}
-                          />
-                       ))}
-                    </div>
-                 </div>
-
-                 <div className="space-y-3">
-                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Ferragens</p>
-                     <div className="flex gap-2">
-                        {quickViewProduct.options.hardware.map(hw => (
-                           <span key={hw} className="px-2 py-1 bg-stone-50 border border-stone-100 rounded text-[10px] text-stone-500 font-medium">{hw}</span>
-                        ))}
-                     </div>
-                 </div>
-
-                 <button 
-                    onClick={handleSendProduct}
-                    className="w-full py-4 bg-[#C08A7D] text-white rounded-xl flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest hover:bg-[#A67569] shadow-lg shadow-[#C08A7D]/20 transition-all active:scale-95"
-                 >
-                    <Send size={14} /> Enviar para Conversa
-                 </button>
-              </div>
-           </div>
-        </div>
-      )}
     </div>
   );
 };

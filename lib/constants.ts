@@ -1,3 +1,4 @@
+
 import { 
   MessageCircle, 
   Instagram, 
@@ -14,7 +15,6 @@ import {
   Send,
   Clock
 } from 'lucide-react';
-// Fix: Explicitly import from types/index.ts to resolve ambiguity between types.ts and types/index.ts, ensuring V3 types are used.
 import { 
   ChannelSource, 
   SalesStage, 
@@ -87,12 +87,37 @@ export const SALES_STAGES_CONFIG: Record<SalesStage, { label: string; icon: any;
  * PRODUCTION_STAGES
  * The artisanal workshop (Make-to-order) pipeline.
  */
-export const PRODUCTION_STAGES_CONFIG: Record<ProductionStage, { label: string; icon: any; emoji: string }> = {
-  corte: { label: 'Corte', icon: Scissors, emoji: '✂️' },
-  costura: { label: 'Costura', icon: Zap, emoji: '🧵' },
-  montagem: { label: 'Montagem', icon: Hammer, emoji: '🔨' },
-  acabamento: { label: 'Acabamento', icon: Sparkles, emoji: '✨' },
-  pronto: { label: 'Pronto', icon: Package, emoji: '📦' },
+export const PRODUCTION_STAGES_CONFIG: Record<ProductionStage, { label: string; icon: any; emoji: string; checklist: string[] }> = {
+  corte: { 
+    label: 'Corte', 
+    icon: Scissors, 
+    emoji: '✂️', 
+    checklist: ['Conferir sentido do fio do couro', 'Validar moldes sem imperfeições', 'Inspecionar marcas naturais do couro'] 
+  },
+  costura: { 
+    label: 'Costura', 
+    icon: Zap, 
+    emoji: '🧵', 
+    checklist: ['Ajustar tensão da linha', 'Validar cor da linha com a amostra', 'Reforçar pontos de tensão'] 
+  },
+  montagem: { 
+    label: 'Montagem', 
+    icon: Hammer, 
+    emoji: '🔨', 
+    checklist: ['Colagem simétrica dos foles', 'Aplicação de estruturantes internos', 'Verificar alinhamento de base'] 
+  },
+  acabamento: { 
+    label: 'Acabamento', 
+    icon: Sparkles, 
+    emoji: '✨', 
+    checklist: ['Tingimento de bordas (3 camadas)', 'Polimento de metais', 'Limpeza final interna/externa'] 
+  },
+  pronto: { 
+    label: 'Pronto', 
+    icon: Package, 
+    emoji: '📦', 
+    checklist: ['Conferência final de SKU', 'Embalagem em dustbag', 'Inserir cartão de agradecimento'] 
+  },
 };
 
 /**

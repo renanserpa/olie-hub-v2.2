@@ -5,31 +5,35 @@ import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 're
 import { 
   Send, Paperclip, PanelLeftClose, PanelLeftOpen, 
   PanelRightClose, PanelRightOpen, CheckCircle2,
-  Copy, Truck, Plus, ShoppingBag, Package, Sparkles,
-  ChevronDown, MoreHorizontal, Loader2, QrCode
+  ChevronDown, MoreHorizontal, Loader2, QrCode,
+  ShoppingBag, Package, Truck, Plus, Sparkles,
+  Zap, Heart, Stars, BrainCircuit, Bot, UserPlus, 
+  ArrowRightLeft, ShieldCheck, UserCircle, Scissors
 } from 'lucide-react';
-// Importação corrigida com caminho relativo duplo para sair de 'inbox' e 'components'
-import { Message, ChannelSource } from '../../types/index.ts';
-import { OmnichannelService } from '../../services/api.ts';
+import { Message, ChannelSource, ConvoStatus } from '../../types/index.ts';
+import { OmnichannelService, AIService } from '../../services/api.ts';
 
 interface ChatWindowProps {
-  client: { id: string; name: string; avatar: string; source: ChannelSource; } | null;
+  client: { 
+    id: string; 
+    name: string; 
+    avatar: string; 
+    source: ChannelSource; 
+    status: ConvoStatus;
+    assignee_id?: string | null;
+  } | null;
   messages: Message[];
   onSendMessage: (text: string) => void;
-  
-  // Layout Props
   isLeftOpen: boolean;
   onToggleLeft: () => void;
   isRightOpen: boolean;
   onToggleRight: () => void;
-  
-  // Infinite Scroll Props
   onLoadMore?: () => void;
   hasMore?: boolean;
   isLoadingHistory?: boolean;
-  
-  // Action Handlers
   onTriggerAction: (action: 'order' | 'catalog') => void;
+  onUpdateStatus?: (status: ConvoStatus) => void;
+  onTransfer?: (agentId: string) => void;
 }
 
 interface Toast {
@@ -42,21 +46,25 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   client, messages, onSendMessage, 
   isLeftOpen, onToggleLeft, isRightOpen, onToggleRight,
   onLoadMore, hasMore, isLoadingHistory,
-  onTriggerAction
+  onTriggerAction, onUpdateStatus, onTransfer
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [isGeneratingReply, setIsGeneratingReply] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [isTransferMenuOpen, setIsTransferMenuOpen] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const transferMenuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const previousScrollHeightRef = useRef<number>(0);
 
-  // --- 1. Toast System ---
+  const isBotActive = client?.status === 'bot';
+
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
     const id = Math.random().toString(36).substring(7);
     setToasts(prev => [...prev, { id, message, type }]);
@@ -65,83 +73,70 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }, 3000); 
   };
 
-  // --- 2. Scroll Logic & Infinite Scroll ---
-
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
+  const handleSmartReply = async () => {
+    if (!client || messages.length === 0 || isGeneratingReply) return;
+    setIsGeneratingReply(true);
+    try {
+      const suggestion = await AIService.generateSmartReply(messages, client.name);
+      setInputText(suggestion);
+      showToast("Sugestão da IA aplicada!", 'success');
+      inputRef.current?.focus();
+    } catch (err) {
+      showToast("Erro ao gerar sugestão", 'info');
+    } finally {
+      setIsGeneratingReply(false);
+    }
+  };
+
+  const toggleBotMode = () => {
+    const newStatus = isBotActive ? 'assigned' : 'bot';
+    onUpdateStatus?.(newStatus);
+    showToast(isBotActive ? "Concierge Humano assumiu." : "Assistente Digital ativado.", 'info');
+  };
+
+  const handleTransfer = (agentId: string) => {
+    onTransfer?.(agentId);
+    setIsTransferMenuOpen(false);
+    showToast(`Atendimento transferido para ${agentId}`, 'success');
+  };
+
   const handleScroll = () => {
     if (!scrollContainerRef.current) return;
-    
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    
-    // 2.1 "Back to Bottom" Button Logic
-    const isDistanceFromBottom = scrollHeight - scrollTop - clientHeight > 300;
-    setShowScrollButton(isDistanceFromBottom);
-
-    // 2.2 Infinite Scroll Trigger (Top detection)
-    // Trigger when user scrolls close to top (e.g., < 50px)
+    setShowScrollButton(scrollHeight - scrollTop - clientHeight > 300);
     if (scrollTop < 50 && hasMore && !isLoadingHistory && onLoadMore) {
-        // Save current height to restore position after render
         previousScrollHeightRef.current = scrollHeight;
         onLoadMore();
     }
   };
 
-  // 2.3 Restore Scroll Position after History Load
   useLayoutEffect(() => {
     if (!scrollContainerRef.current) return;
-    
     const container = scrollContainerRef.current;
-    const currentScrollHeight = container.scrollHeight;
-    const prevScrollHeight = previousScrollHeightRef.current;
-
-    // If scrollHeight increased significantly (meaning items were added to top)
-    // AND we were previously tracking a history load
-    if (prevScrollHeight > 0 && currentScrollHeight > prevScrollHeight) {
-        // Calculate the difference and jump the scrollbar so the view remains stable
-        const heightDifference = currentScrollHeight - prevScrollHeight;
-        container.scrollTop = heightDifference + container.scrollTop; // Add current scrollTop to be safe
-        previousScrollHeightRef.current = 0; // Reset
+    if (previousScrollHeightRef.current > 0 && container.scrollHeight > previousScrollHeightRef.current) {
+        container.scrollTop = (container.scrollHeight - previousScrollHeightRef.current) + container.scrollTop;
+        previousScrollHeightRef.current = 0;
     }
-  }, [messages]); // Trigger when messages array updates
+  }, [messages]);
 
-  // 2.4 Initial Scroll & New Message Auto-Scroll
   useEffect(() => {
     if (!scrollContainerRef.current) return;
-    
     const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
-
-    // Only auto-scroll if it's the first load OR user is already near bottom
-    // We check !isLoadingHistory to prevent jumping to bottom when loading old messages
-    if (!isLoadingHistory && (isNearBottom || messages.length < 10)) {
+    if (!isLoadingHistory && (scrollHeight - scrollTop - clientHeight < 200 || messages.length < 10)) {
       scrollToBottom(messages.length === 0 ? 'auto' : 'smooth');
     }
   }, [messages, client?.id, isLoadingHistory]);
 
-  // --- 3. Click Outside Action Menu ---
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
-        setIsActionMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  // --- 4. Handlers ---
   const handleSubmit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!inputText.trim() || isSending || !client) return;
-
     setIsSending(true);
     const textToSend = inputText;
     setInputText('');
-    inputRef.current?.focus();
-
     try {
       const success = await OmnichannelService.sendMessage(client.source, client.id, textToSend);
       if (success) {
@@ -149,7 +144,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         setTimeout(() => scrollToBottom(), 100);
       }
     } catch (err) {
-      console.error("Erro envio");
       setInputText(textToSend);
       showToast("Falha ao enviar mensagem", 'info');
     } finally {
@@ -157,39 +151,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
-  const handleActionClick = (action: 'order' | 'catalog' | 'pix' | 'freight') => {
-    setIsActionMenuOpen(false); // Fecha o menu imediatamente
-
-    switch (action) {
-      case 'pix':
-        const mockPixCode = "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Olie Atelie6008Sao Paulo62070503***6304E2CA";
-        navigator.clipboard.writeText(mockPixCode)
-          .then(() => showToast("Chave PIX copiada!", 'success'))
-          .catch(() => showToast("Erro ao copiar Pix", 'info'));
-        break;
-
-      case 'freight':
-        showToast("Calculando cotação (Melhor Envio)...", 'info');
-        // Simula delay de API e envia resposta automática no chat
-        setTimeout(() => {
-            const quoteMessage = "📦 Cotação de Frete:\n\n• PAC: R$ 22,90 (5-7 dias úteis)\n• Sedex: R$ 34,50 (2-3 dias úteis)\n\nQual opção prefere?";
-            onSendMessage(quoteMessage);
-            showToast("Cotação enviada para o chat", 'success');
-            scrollToBottom();
-        }, 1500);
-        break;
-
-      case 'order': 
-        onTriggerAction('order'); 
-        break;
-
-      case 'catalog': 
-        onTriggerAction('catalog'); 
-        break;
+  const handleQuickAction = (action: 'pix' | 'frete' | 'order' | 'catalog') => {
+    setIsActionMenuOpen(false);
+    if (action === 'pix') {
+      showToast("Link Pix gerado e enviado!", 'success');
+      onSendMessage("✨ *Pagamento Pix*\nGeramos um link para você concluir seu pedido.\nChave: `financeiro@olie.com.br`\nValor: R$ 489,00");
+    } else if (action === 'frete') {
+      showToast("Frete calculado!", 'success');
+      onSendMessage("🚚 *Cotação de Frete*\nSua entrega para São Paulo fica em R$ 22,00 (SEDEX) ou R$ 14,00 (PAC).");
+    } else {
+      onTriggerAction(action as any);
     }
   };
 
-  // --- 5. Data Processing ---
   const safeDate = (d: string) => {
     const date = new Date(d);
     return isNaN(date.getTime()) ? new Date() : date;
@@ -197,262 +171,220 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   const processedItems = useMemo(() => {
     if (!client) return [];
-    
     const items: any[] = [];
     messages.forEach((msg, idx) => {
-      if (!msg.created_at) return;
-      
-      const prevMsg = messages[idx - 1];
-      const nextMsg = messages[idx + 1];
-      
       const currDate = safeDate(msg.created_at);
-      const prevDate = prevMsg && prevMsg.created_at ? safeDate(prevMsg.created_at) : null;
-      const nextDate = nextMsg && nextMsg.created_at ? safeDate(nextMsg.created_at) : null;
-
+      const prevMsg = messages[idx - 1];
+      const prevDate = prevMsg ? safeDate(prevMsg.created_at) : null;
       if (!prevDate || currDate.toDateString() !== prevDate.toDateString()) {
-        const today = new Date();
-        const yesterday = new Date(today);
-        yesterday.setDate(today.getDate() - 1);
-
-        let dateLabel = currDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
-        if (currDate.toDateString() === today.toDateString()) dateLabel = 'Hoje';
-        else if (currDate.toDateString() === yesterday.toDateString()) dateLabel = 'Ontem';
-
-        items.push({ type: 'date', label: dateLabel });
+        let label = currDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
+        if (currDate.toDateString() === new Date().toDateString()) label = 'Hoje';
+        items.push({ type: 'date', label });
       }
-
-      const TIME_THRESHOLD_MS = 5 * 60 * 1000;
-      const isSameUserPrev = prevMsg && prevMsg.direction === msg.direction;
-      const timeDiffPrev = prevDate ? currDate.getTime() - prevDate.getTime() : Infinity;
-      const isFirstInGroup = !isSameUserPrev || timeDiffPrev > TIME_THRESHOLD_MS || (!prevDate || currDate.toDateString() !== prevDate.toDateString());
-
-      const isSameUserNext = nextMsg && nextMsg.direction === msg.direction;
-      const timeDiffNext = nextDate ? nextDate.getTime() - currDate.getTime() : Infinity;
-      const isLastInGroup = !isSameUserNext || timeDiffNext > TIME_THRESHOLD_MS || (nextDate && currDate.toDateString() !== nextDate.toDateString());
-
-      items.push({ 
-        ...msg,
-        type: 'message',
-        isMe: msg.direction === 'outbound',
-        isFirstInGroup, 
-        isLastInGroup 
-      });
+      items.push({ ...msg, type: 'message', isMe: msg.direction === 'outbound' });
     });
     return items;
   }, [messages, client]);
 
-  // --- 6. RENDER ---
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (actionMenuRef.current && !actionMenuRef.current.contains(event.target as Node)) {
+        setIsActionMenuOpen(false);
+      }
+      if (transferMenuRef.current && !transferMenuRef.current.contains(event.target as Node)) {
+        setIsTransferMenuOpen(false);
+      }
+    };
+    if (isActionMenuOpen || isTransferMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isActionMenuOpen, isTransferMenuOpen]);
+
   if (!client) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF7] relative h-full overflow-hidden">
-         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-[#FDFBF7] to-[#FDFBF7] z-0" />
-         <div className="absolute top-4 left-4 z-50">
-            {!isLeftOpen && (
-              <button onClick={onToggleLeft} className="p-2 bg-white border border-[#EBE8E0] rounded-xl text-stone-400 hover:text-[#C08A7D] shadow-sm transition-all hover:scale-105">
-                <PanelLeftOpen size={20} />
-              </button>
-            )}
-         </div>
-         <div className="relative group cursor-default z-10 text-center animate-in fade-in zoom-in-95 duration-700">
-            <div className="absolute inset-0 bg-[#C08A7D]/20 blur-3xl rounded-full scale-150 animate-pulse opacity-40" />
-            <div className="w-24 h-24 mx-auto bg-gradient-to-br from-[#FAF9F6] to-[#F2F0EA] rounded-[2rem] border border-[#EBE8E0] flex items-center justify-center mb-8 relative shadow-xl shadow-[#C08A7D]/10 group-hover:-translate-y-2 transition-transform duration-500">
-                <Sparkles size={32} className="text-[#C08A7D] animate-[spin_10s_linear_infinite]" strokeWidth={1} />
+      <div className="flex-1 flex flex-col items-center justify-center bg-stone-50 relative h-full overflow-hidden">
+         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-stone-50 to-stone-100 z-0" />
+         <div className="relative z-10 text-center animate-in fade-in zoom-in-95 duration-1000 px-6 max-w-sm">
+            <div className="relative mb-12 group">
+              <div className="absolute inset-0 -m-4 border border-olie-500/10 rounded-[3rem] animate-[spin_10s_linear_infinite]" />
+              <div className="w-24 h-24 mx-auto bg-white rounded-[2.5rem] border border-stone-200/60 flex items-center justify-center shadow-olie-lg group-hover:-translate-y-2 transition-transform duration-700 relative z-10">
+                  <span className="text-olie-500 font-serif italic text-4xl select-none">O</span>
+                  <Sparkles size={16} className="absolute -top-1 -right-1 text-olie-300 animate-pulse" />
+              </div>
             </div>
-            <h2 className="font-serif italic text-4xl text-[#1A1A1A] mb-3">Bem-vindo ao Inbox</h2>
-            <p className="text-[10px] font-black font-sans text-stone-400 uppercase tracking-[0.2em] mb-8">Selecione uma conversa para iniciar</p>
+            <h2 className="font-serif italic text-3xl text-olie-900 mb-4 tracking-tight leading-tight">O Ateliê Olie aguarda suas histórias.</h2>
+            <p className="text-xs text-stone-400 font-medium leading-relaxed mb-10 px-4">Selecione um atendimento para iniciar uma experiênca artesanal.</p>
          </div>
       </div>
     );
   }
 
   return (
-    <div className="flex flex-col h-full relative overflow-hidden bg-[#FDFBF7]">
-      <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')]" />
-      
-      {/* HEADER */}
-      <header className="h-16 px-6 border-b border-[#F2F0EA] flex justify-between items-center bg-white/80 backdrop-blur-md z-40 shrink-0 shadow-sm relative">
+    <div className={`flex flex-col h-full relative transition-all duration-500 ${isBotActive ? 'bg-olie-50/20' : 'bg-stone-50'}`}>
+      <header className="h-20 px-6 border-b border-stone-200/60 flex justify-between items-center bg-white/80 backdrop-blur-md z-40 shrink-0">
         <div className="flex items-center gap-4">
-          <button 
-             onClick={onToggleLeft}
-             className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-400 hover:bg-stone-50 hover:text-[#C08A7D] transition-colors"
-             title={isLeftOpen ? "Fechar Lista" : "Abrir Lista"}
-          >
+          <button onClick={onToggleLeft} className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-400 hover:bg-stone-50 hover:text-olie-500 transition-colors">
              {isLeftOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
-
-          <div 
-            onClick={onToggleRight}
-            className="flex items-center gap-3 pl-4 border-l border-stone-100 cursor-pointer group select-none py-1"
-          >
-            <div className="w-9 h-9 rounded-xl bg-[#C08A7D] flex items-center justify-center font-serif text-white italic text-base shadow-md shadow-[#C08A7D]/20 group-hover:scale-105 transition-transform">
-              {client.avatar}
+          <div onClick={onToggleRight} className="flex items-center gap-3 pl-4 border-l border-stone-200/60 cursor-pointer group py-1">
+            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-serif text-white italic text-lg shadow-lg transition-all duration-500 ${isBotActive ? 'bg-stone-900 scale-105' : 'bg-olie-500 shadow-olie-500/20'}`}>
+              {isBotActive ? <Bot size={20} /> : client.avatar}
             </div>
             <div className="flex flex-col">
-              <h2 className="font-serif font-bold text-[#333333] text-base tracking-tight leading-none group-hover:text-[#C08A7D] transition-colors">
-                {client.name}
-              </h2>
-              <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest mt-0.5">{client.source}</span>
+              <div className="flex items-center gap-2">
+                <h2 className="font-serif font-bold text-olie-900 text-lg tracking-tight leading-none">{client.name}</h2>
+                {isBotActive && (
+                  <span className="px-2 py-0.5 bg-stone-900 text-white text-[8px] font-black uppercase rounded-lg shadow-sm flex items-center gap-1">
+                    <Zap size={8} fill="white" /> Bot Activo
+                  </span>
+                )}
+              </div>
+              <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest mt-1 italic">{client.source}</span>
             </div>
           </div>
         </div>
+
         <div className="flex items-center gap-2">
-           <button className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 transition-all">
-              <MoreHorizontal size={20} />
-           </button>
+           {/* Bot Toggle Switch */}
            <button 
-              onClick={onToggleRight}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRightOpen ? 'bg-[#333333] text-white shadow-lg shadow-black/10' : 'text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50'}`}
+             onClick={toggleBotMode}
+             className={`flex items-center gap-2 px-4 h-10 rounded-xl transition-all border shadow-sm ${isBotActive ? 'bg-stone-900 text-white border-stone-900' : 'bg-white text-stone-400 border-stone-200 hover:border-olie-500/30'}`}
+             title={isBotActive ? "Desativar Automação" : "Ativar Atendimento Automático"}
            >
+              <Bot size={16} className={isBotActive ? "animate-pulse" : ""} />
+              <span className="text-[9px] font-black uppercase tracking-widest hidden lg:block">Assistente IA</span>
+           </button>
+
+           {/* Transfer Menu */}
+           <div className="relative">
+              <button 
+                onClick={() => setIsTransferMenuOpen(!isTransferMenuOpen)}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all border ${isTransferMenuOpen ? 'bg-olie-50 text-olie-600 border-olie-200' : 'bg-white text-stone-400 border-stone-200 hover:bg-stone-50'}`}
+                title="Transferir Atendimento"
+              >
+                <ArrowRightLeft size={18} />
+              </button>
+
+              {isTransferMenuOpen && (
+                <div ref={transferMenuRef} className="absolute top-full mt-3 right-0 w-64 bg-white rounded-3xl shadow-olie-lg border border-stone-100 p-2 z-[60] animate-in slide-in-from-top-2 duration-300">
+                   <div className="px-4 py-2 mb-1 border-b border-stone-50">
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Delegar para:</span>
+                   </div>
+                   <button onClick={() => handleTransfer('Comercial')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-all group">
+                      <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all"><ShoppingBag size={16}/></div>
+                      <div className="text-left">
+                        <p className="text-[10px] font-black uppercase text-stone-800">Comercial</p>
+                        <p className="text-[8px] text-stone-400 font-bold">Fechamento e Vendas</p>
+                      </div>
+                   </button>
+                   <button onClick={() => handleTransfer('Mestre Artesão')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-all group">
+                      {/* Fixed: Scissors icon is now imported */}
+                      <div className="w-9 h-9 rounded-xl bg-olie-50 text-olie-500 flex items-center justify-center group-hover:bg-olie-900 group-hover:text-white transition-all"><Scissors size={16}/></div>
+                      <div className="text-left">
+                        <p className="text-[10px] font-black uppercase text-stone-800">Mestre Artesão</p>
+                        <p className="text-[8px] text-stone-400 font-bold">Dúvidas Técnicas / Ateliê</p>
+                      </div>
+                   </button>
+                   <button onClick={() => handleTransfer('Financeiro')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-all group">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover:bg-emerald-500 group-hover:text-white transition-all"><ShieldCheck size={16}/></div>
+                      <div className="text-left">
+                        <p className="text-[10px] font-black uppercase text-stone-800">Financeiro</p>
+                        <p className="text-[8px] text-stone-400 font-bold">Pagamentos e Notas</p>
+                      </div>
+                   </button>
+                </div>
+              )}
+           </div>
+
+           <div className="w-px h-8 bg-stone-100 mx-2" />
+
+           <button onClick={handleSmartReply} disabled={isGeneratingReply} className="w-10 h-10 flex items-center justify-center bg-olie-50 text-olie-500 rounded-xl hover:bg-olie-100 transition-all border border-olie-200/50 shadow-sm">
+              {isGeneratingReply ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
+           </button>
+           <button onClick={onToggleRight} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRightOpen ? 'bg-olie-900 text-white shadow-lg' : 'text-stone-400 hover:text-olie-500 hover:bg-stone-50'}`}>
               {isRightOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
            </button>
         </div>
       </header>
 
-      {/* MESSAGES AREA */}
-      <div 
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-8 py-6 space-y-0.5 scrollbar-hide flex flex-col z-10 relative scroll-smooth"
-      >
-        {/* Loading History Indicator */}
+      <div ref={scrollContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto px-6 md:px-10 py-8 space-y-2 scrollbar-hide flex flex-col z-10 relative scroll-smooth">
         {isLoadingHistory && (
           <div className="flex justify-center py-4">
-             <div className="flex items-center gap-2 px-4 py-2 bg-white/50 rounded-full shadow-sm border border-stone-100">
-               <Loader2 size={14} className="animate-spin text-[#C08A7D]" />
-               <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Carregando histórico...</span>
+             <div className="flex items-center gap-2 px-4 py-2 bg-white/50 rounded-full shadow-sm border border-stone-200/60">
+               <Loader2 size={14} className="animate-spin text-olie-500" />
+               <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Resgatando histórico...</span>
              </div>
           </div>
         )}
-
         {processedItems.map((item, idx) => {
           if (item.type === 'date') return (
-            <div key={`date-${idx}`} className="flex justify-center py-6 sticky top-0 z-30 pointer-events-none">
-              <span className="px-4 py-1.5 bg-[#FDFBF7]/90 backdrop-blur-md border border-[#EBE8E0] rounded-full text-[9px] font-black text-stone-400 uppercase tracking-[0.2em] shadow-sm select-none">
+            <div key={`date-${idx}`} className="flex justify-center py-8 sticky top-0 z-30 pointer-events-none">
+              <span className="px-5 py-2 bg-stone-50/90 backdrop-blur-md border border-stone-200/60 rounded-full text-[9px] font-black text-stone-400 uppercase tracking-[0.3em] shadow-sm select-none">
                 {item.label}
               </span>
             </div>
           );
-
           const isMe = item.isMe;
-          let radiusClass = '';
-          if (isMe) {
-            radiusClass = `rounded-l-[1.4rem] ${item.isFirstInGroup ? 'rounded-tr-[1.4rem]' : 'rounded-tr-[2px]'} ${item.isLastInGroup ? 'rounded-br-[1.4rem]' : 'rounded-br-[2px]'}`;
-          } else {
-            radiusClass = `rounded-r-[1.4rem] ${item.isFirstInGroup ? 'rounded-tl-[1.4rem]' : 'rounded-tl-[2px]'} ${item.isLastInGroup ? 'rounded-bl-[1.4rem]' : 'rounded-bl-[2px]'}`;
-          }
-
-          const marginClass = item.isFirstInGroup ? 'mt-4' : 'mt-[2px]';
-
           return (
-            <div key={item.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} ${marginClass} animate-in fade-in slide-in-from-bottom-1 duration-300`}>
-              <div className={`flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'} group`}>
-                <div className={`px-5 py-3 text-[14px] font-medium leading-relaxed shadow-sm relative transition-all hover:shadow-md ${
+            <div key={item.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} animate-in fade-in slide-in-from-bottom-2 duration-300`}>
+              <div className={`flex flex-col max-w-[85%] md:max-w-[70%] ${isMe ? 'items-end' : 'items-start'} group`}>
+                <div className={`px-6 py-3.5 text-sm font-medium leading-relaxed shadow-sm rounded-4xl transition-all ${
                   isMe 
-                    ? 'bg-gradient-to-br from-olie-500 to-olie-700 text-white shadow-md shadow-olie-500/20 ' + radiusClass 
-                    : 'bg-white text-stone-700 border border-[#F2F0EA] ' + radiusClass
+                    ? 'bg-gradient-to-br from-olie-500 to-olie-700 text-white rounded-tr-none shadow-olie-soft' 
+                    : 'bg-white text-stone-700 border border-stone-200/60 rounded-tl-none'
                 }`}>
                   <p className="whitespace-pre-wrap">{item.content}</p>
                 </div>
-                <div className={`overflow-hidden transition-all duration-300 ${item.isLastInGroup ? 'max-h-10 opacity-100' : 'max-h-0 opacity-0 group-hover:max-h-10 group-hover:opacity-100'}`}>
-                  <span className={`text-[9px] font-bold text-stone-300 uppercase mt-1 px-1 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'items-start'}`}>
-                    {safeDate(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
-                    {isMe && <CheckCircle2 size={10} className="text-[#C08A7D]" />}
-                  </span>
-                </div>
+                <span className={`text-[9px] font-bold text-stone-300 uppercase mt-1.5 px-2 flex items-center gap-1.5 ${isMe ? 'justify-end' : ''}`}>
+                  {safeDate(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
+                  {isMe && <CheckCircle2 size={10} className="text-olie-500" />}
+                </span>
               </div>
             </div>
           );
         })}
         <div ref={messagesEndRef} className="h-4" />
       </div>
-      
-      {/* Scroll To Bottom Button */}
-      {showScrollButton && (
-        <button 
-          onClick={() => scrollToBottom()}
-          className="absolute bottom-24 right-8 z-50 p-3 bg-white border border-[#EBE8E0] rounded-full text-stone-400 hover:text-[#C08A7D] shadow-lg hover:-translate-y-1 transition-all animate-in zoom-in"
-        >
-          <ChevronDown size={20} />
-        </button>
-      )}
 
-      {/* FOOTER & ACTION MENU */}
-      <div className="px-6 py-4 bg-white border-t border-[#F2F0EA] z-40 shrink-0 relative">
+      <div className="px-6 md:px-8 py-6 bg-white border-t border-stone-200/60 z-40 shrink-0 relative">
         {isActionMenuOpen && (
-          <div ref={actionMenuRef} className="absolute bottom-20 left-6 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#F2F0EA] overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
-             <div className="p-2 space-y-1">
-                {/* Ações de Venda */}
-                <button onClick={() => handleActionClick('order')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><ShoppingBag size={14} /></div>
-                   <div className="flex flex-col">
-                      <span className="text-[11px] font-black uppercase tracking-wide">Novo Pedido</span>
-                      <span className="text-[9px] text-stone-400">Criar pedido manual</span>
-                   </div>
-                </button>
-                <button onClick={() => handleActionClick('catalog')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><Package size={14} /></div>
-                   <div className="flex flex-col">
-                      <span className="text-[11px] font-black uppercase tracking-wide">Abrir Catálogo</span>
-                      <span className="text-[9px] text-stone-400">Ver produtos e estoque</span>
-                   </div>
-                </button>
-
-                <div className="h-px bg-stone-100 my-1 mx-2" />
-                
-                {/* Utilitários */}
-                <button onClick={() => handleActionClick('pix')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-emerald-500 group-hover:text-white transition-all"><QrCode size={14} /></div>
-                   <div className="flex flex-col">
-                      <span className="text-[11px] font-black uppercase tracking-wide">Gerar Link Pix</span>
-                      <span className="text-[9px] text-stone-400">Copiar código de pagamento</span>
-                   </div>
-                </button>
-                <button onClick={() => handleActionClick('freight')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-blue-500 group-hover:text-white transition-all"><Truck size={14} /></div>
-                   <div className="flex flex-col">
-                      <span className="text-[11px] font-black uppercase tracking-wide">Consultar Frete</span>
-                      <span className="text-[9px] text-stone-400">Calcular via Melhor Envio</span>
-                   </div>
-                </button>
-             </div>
+          <div ref={actionMenuRef} className="absolute bottom-full mb-4 left-6 md:left-8 bg-white border border-stone-200/60 rounded-3xl shadow-olie-lg p-2 min-w-[220px] z-50 animate-in slide-in-from-bottom-2 duration-300">
+             <button onClick={() => handleQuickAction('pix')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-colors group">
+                <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-500 flex items-center justify-center group-hover:scale-110 transition-transform"><QrCode size={16} /></div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-stone-600">Link Pix</span>
+             </button>
+             <button onClick={() => handleQuickAction('frete')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-colors group">
+                <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center group-hover:scale-110 transition-transform"><Truck size={16} /></div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-stone-600">Consultar Frete</span>
+             </button>
+             <div className="h-px bg-stone-100 my-1 mx-2" />
+             <button onClick={() => handleQuickAction('order')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-colors group">
+                <div className="w-8 h-8 rounded-xl bg-olie-50 text-olie-500 flex items-center justify-center group-hover:scale-110 transition-transform"><ShoppingBag size={16} /></div>
+                <span className="text-[10px] font-black uppercase tracking-widest text-stone-600">Novo Pedido</span>
+             </button>
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="flex items-center gap-3 bg-[#FAF9F6] border border-[#F2F0EA] rounded-[1.5rem] p-1.5 pr-2 focus-within:ring-2 focus-within:ring-[#C08A7D]/10 focus-within:border-[#C08A7D]/30 transition-all shadow-inner">
-           <button 
-              type="button" 
-              onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition-all ${isActionMenuOpen ? 'bg-[#333333] text-white rotate-45 shadow-lg' : 'bg-white border border-[#EBE8E0] text-stone-400 hover:text-[#C08A7D] hover:border-[#C08A7D]/30'}`}
-              title="Ações Rápidas"
-           >
-              <Plus size={18} />
+        <form onSubmit={handleSubmit} className="flex items-center gap-4 bg-stone-50 border border-stone-200/60 rounded-4xl p-2 pr-3 focus-within:ring-4 focus-within:ring-olie-500/5 focus-within:border-olie-500/20 transition-all shadow-inner">
+           <button type="button" onClick={() => setIsActionMenuOpen(!isActionMenuOpen)} className={`w-11 h-11 rounded-3xl flex items-center justify-center transition-all ${isActionMenuOpen ? 'bg-olie-900 text-white rotate-45 shadow-lg' : 'bg-white border border-stone-200 text-stone-400 hover:text-olie-500'}`}>
+              <Plus size={20} />
            </button>
-           <input 
-              ref={inputRef}
-              value={inputText} 
-              onChange={e => setInputText(e.target.value)} 
-              placeholder="Escreva sua mensagem..." 
-              autoFocus
-              className="flex-1 bg-transparent outline-none text-stone-700 placeholder:text-stone-300 h-full py-2.5 text-sm font-medium" 
-           />
-           <button type="button" className="w-9 h-9 rounded-full flex items-center justify-center text-stone-400 hover:text-[#C08A7D] hover:bg-white transition-all">
-              <Paperclip size={18} />
+           <input ref={inputRef} value={inputText} onChange={e => setInputText(e.target.value)} placeholder={isBotActive ? "O assistente digital está cuidando disso..." : "Digite sua mensagem..."} className="flex-1 bg-transparent outline-none text-stone-800 placeholder:text-stone-300 py-3 text-sm font-medium" />
+           <button type="button" className="hidden md:flex w-10 h-10 rounded-2xl items-center justify-center text-stone-300 hover:text-olie-500 hover:bg-white transition-all">
+              <Paperclip size={20} />
            </button>
-           <button 
-              type="submit" 
-              disabled={!inputText.trim() || isSending} 
-              className="w-9 h-9 bg-[#C08A7D] text-white rounded-full flex items-center justify-center shadow-md hover:bg-[#A67569] disabled:opacity-50 disabled:shadow-none transition-all transform hover:scale-105 active:scale-95"
-           >
-              {isSending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={16} className="ml-0.5" />}
+           <button type="submit" disabled={!inputText.trim() || isSending} className="w-11 h-11 bg-olie-500 text-white rounded-3xl flex items-center justify-center shadow-lg shadow-olie-500/20 hover:bg-olie-600 transition-all transform hover:scale-105 active:scale-95 disabled:opacity-30">
+              {isSending ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} className="ml-0.5" />}
            </button>
         </form>
       </div>
 
-      <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-max pointer-events-none">
+      <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-max pointer-events-none">
          {toasts.map(toast => (
-            <div key={toast.id} className="bg-[#333333] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto border border-white/10">
-               <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-400' : 'bg-blue-400'} shadow-[0_0_8px_rgba(52,211,153,0.5)]`} />
-               <span className="text-xs font-bold tracking-wide">{toast.message}</span>
+            <div key={toast.id} className="bg-olie-900 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto border border-white/10">
+               <div className={`w-2 h-2 rounded-full ${toast.type === 'success' ? 'bg-emerald-400' : 'bg-blue-400'} shadow-[0_0_8px_currentColor]`} />
+               <span className="text-[10px] font-black uppercase tracking-widest">{toast.message}</span>
             </div>
          ))}
       </div>

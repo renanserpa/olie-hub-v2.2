@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useMemo } from 'react';
@@ -67,7 +68,9 @@ export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({
     
     setStatus('processing');
     try {
-      const response = await OrderService.create(cart);
+      // Pass the client context (Name is mandatory) to the service
+      const response = await OrderService.create(cart, { name: clientName });
+      
       if (response.status === 'success') {
         setStatus('success');
         
@@ -142,12 +145,23 @@ export const SmartOrderModal: React.FC<SmartOrderModalProps> = ({
         <div className="w-[350px] bg-[#FAF9F6] p-10 flex flex-col">
           <h3 className="text-[11px] font-black text-stone-400 uppercase tracking-[0.2em] mb-10">Carrinho</h3>
           <div className="mt-8 pt-8 border-t border-stone-200">
+            {status === 'error' && (
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-100 rounded-xl flex items-center gap-2 text-rose-500">
+                <AlertCircle size={14} />
+                <span className="text-[10px] font-bold">{errorMessage}</span>
+              </div>
+            )}
             <button 
               disabled={cart.length === 0 || status === 'processing'} 
               onClick={handleFinalize} 
-              className="w-full h-16 bg-[#C08A7D] text-white rounded-[1.5rem] font-black uppercase text-[10px]"
+              className="w-full h-16 bg-[#C08A7D] text-white rounded-[1.5rem] font-black uppercase text-[10px] disabled:opacity-50 disabled:cursor-not-allowed transition-all"
             >
-              {status === 'processing' ? 'Sincronizando...' : 'Finalizar Pedido'}
+              {status === 'processing' ? (
+                <div className="flex items-center justify-center gap-2">
+                  <Loader2 size={16} className="animate-spin" />
+                  Sincronizando...
+                </div>
+              ) : 'Finalizar Pedido'}
             </button>
           </div>
         </div>

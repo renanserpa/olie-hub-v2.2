@@ -13,6 +13,7 @@ import {
 } from '../types/index.ts';
 import { MOCK_PRODUCTS } from '../lib/constants.ts';
 
+// Toggle this to enable Real API calls via Next.js Proxy
 const USE_MOCK = true;
 
 const simulateNetwork = async (errorChance = 0): Promise<void> => {
@@ -117,7 +118,11 @@ export const OrderService = {
       concluidos: 142
     };
   },
-  create: async (payload: CartItem[]): Promise<{ tiny_id: string; status: string }> => {
+  
+  /**
+   * Create Order - Supports Mock or Real Tiny ERP via Proxy
+   */
+  create: async (cart: CartItem[], customerContext?: { name: string; email?: string }): Promise<{ tiny_id: string; status: string }> => {
     if (USE_MOCK) {
       await simulateNetwork(0.1); 
       return {
@@ -125,7 +130,29 @@ export const OrderService = {
         status: 'success'
       };
     }
-    throw new Error("API Real não configurada.");
+
+    // Real API Call via Proxy
+    try {
+      const response = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: cart, customer: customerContext })
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to create order');
+      }
+
+      return {
+        tiny_id: result.tiny_id,
+        status: 'success'
+      };
+    } catch (error) {
+      console.error("Order Creation Failed:", error);
+      throw error;
+    }
   }
 };
 

@@ -1,3 +1,4 @@
+
 /**
  * OlieHub V3 - Core Type Definitions
  * Domain: Artisanal Luxury / Make-to-Order Business
@@ -35,6 +36,7 @@ export interface Client {
   time: string;
   source: ChannelSource;
   unreadCount: number;
+  tags?: string[]; // Added for better UI context
 }
 
 export interface Customer {

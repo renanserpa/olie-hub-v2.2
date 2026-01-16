@@ -5,7 +5,6 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ConversationList } from '../../components/inbox/conversation-list.tsx';
 import { ChatWindow } from '../../components/inbox/chat-window.tsx';
 import { ActionPanel } from '../../components/inbox/action-panel.tsx';
-import { MainSidebar } from '../../components/layout/main-sidebar.tsx';
 import { useChat } from '../../hooks/use-chat.ts';
 import { MOCK_PRODUCTS } from '../../lib/constants.ts';
 import { OrderService } from '../../services/api.ts';
@@ -14,7 +13,7 @@ import { SmartOrderModal } from '../../components/orders/smart-order-modal.tsx';
 export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   
-  // Layout State - Initialize with correct panel visibility
+  // Layout State
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<'crm' | 'orders' | 'catalog' | null>(null);
@@ -23,7 +22,14 @@ export default function InboxPage() {
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
-  const { conversations = [], messages = [], sendMessage } = useChat(selectedId);
+  const { 
+    conversations = [], 
+    messages = [], 
+    sendMessage,
+    loadMoreMessages,
+    hasMore,
+    isFetchingHistory
+  } = useChat(selectedId);
 
   const activeConv = useMemo(() => 
     (conversations || []).find(c => c.id === selectedId), 
@@ -67,12 +73,10 @@ export default function InboxPage() {
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
     
-    // Smart Responsiveness:
-    // Large screens: Auto-open context panel if not already open
+    // Smart Responsiveness
     if (window.innerWidth >= 1280 && !isRightOpen) {
         setIsRightOpen(true);
     }
-    // Mobile: Close list to focus on chat
     if (window.innerWidth < 768) {
         setIsLeftOpen(false);
     }
@@ -96,21 +100,10 @@ export default function InboxPage() {
   };
 
   return (
-    <div className="flex h-screen bg-[#FDFBF7] text-[#333333] overflow-hidden font-sans selection:bg-[#C08A7D] selection:text-white">
-      {/* 0. Global Sidebar (Fixed Width) */}
-      <MainSidebar />
+    <>
+      <div className="flex-1 flex overflow-hidden relative h-full">
 
-      {/* 
-         LAYOUT CONTAINER 
-         Uses a flex row to manage the 3 panels.
-      */}
-      <div className="flex-1 flex overflow-hidden relative">
-
-        {/* 
-           1. LEFT PANE - Conversation List (w-80 / 320px)
-           - Wrapper animates width and opacity.
-           - Inner div has fixed width to prevent content squishing.
-        */}
+        {/* LEFT PANE */}
         <div 
           className={`shrink-0 bg-white border-r border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
             isLeftOpen ? 'w-80 opacity-100 translate-x-0' : 'w-0 opacity-0 -translate-x-10 border-none'
@@ -125,11 +118,7 @@ export default function InboxPage() {
           </div>
         </div>
 
-        {/* 
-           2. CENTER PANE - Chat Window 
-           - Flex-1 to take remaining space.
-           - Minimal styling to blend with Olie theme.
-        */}
+        {/* CENTER PANE */}
         <div className="flex-1 flex flex-col min-w-0 relative z-10 h-full bg-[#FDFBF7] shadow-xl shadow-stone-200/20">
           <ChatWindow 
             client={selectedId && activeConv ? { 
@@ -141,21 +130,23 @@ export default function InboxPage() {
             messages={selectedId ? (uiMessages as any) : []} 
             onSendMessage={sendMessage} 
             
-            // Panel Controls passed to Header
+            // Layout Props
             isLeftOpen={isLeftOpen}
             onToggleLeft={() => setIsLeftOpen(!isLeftOpen)}
             isRightOpen={isRightOpen}
             onToggleRight={() => setIsRightOpen(!isRightOpen)}
             
+            // Infinite Scroll Props
+            onLoadMore={loadMoreMessages}
+            hasMore={hasMore}
+            isLoadingHistory={isFetchingHistory}
+
             // Actions
             onTriggerAction={handleChatAction}
           />
         </div>
 
-        {/* 
-           3. RIGHT PANE - Action/Context Panel (w-96 / 384px)
-           - Similar animation logic to Left Pane.
-        */}
+        {/* RIGHT PANE */}
         <div 
            className={`shrink-0 bg-white border-l border-[#F2F0EA] transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] overflow-hidden relative z-20 ${
             isRightOpen ? 'w-96 opacity-100 translate-x-0' : 'w-0 opacity-0 translate-x-10 border-none'
@@ -163,7 +154,7 @@ export default function InboxPage() {
         >
            <div className="w-96 h-full absolute top-0 left-0">
               <ActionPanel 
-                isOpen={true} // Controlled by parent layout container via width
+                isOpen={true} 
                 onClose={() => setIsRightOpen(false)}
                 client={activeConv?.customer ? {
                     name: activeConv.customer.full_name,
@@ -181,7 +172,6 @@ export default function InboxPage() {
 
       </div>
 
-      {/* 4. MODALS OVERLAY */}
       <SmartOrderModal 
         isOpen={isOrderModalOpen}
         onClose={() => setIsOrderModalOpen(false)}
@@ -189,6 +179,6 @@ export default function InboxPage() {
         catalog={MOCK_PRODUCTS}
         onOrderComplete={handleOrderComplete}
       />
-    </div>
+    </>
   );
 }

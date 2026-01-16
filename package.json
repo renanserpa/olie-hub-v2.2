@@ -13,7 +13,9 @@
     "react-dom": "^19.2.3",
     "lucide-react": "^0.562.0",
     "@supabase/ssr": "^0.8.0",
-    "tailwindcss": "^4.1.18"
+    "@supabase/supabase-js": "^2.90.1",
+    "tailwindcss": "^4.1.18",
+    "next": "^16.1.2"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",

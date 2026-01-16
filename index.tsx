@@ -1,7 +1,6 @@
 
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
-import './app/globals.css'; // Import Global CSS
 import RootLayout from './app/layout.tsx';
 import DashboardPage from './app/page.tsx';
 import InboxPage from './app/inbox/page.tsx';
@@ -11,7 +10,6 @@ import SettingsPage from './app/settings/page.tsx';
 import ProductionPage from './app/production/page.tsx';
 
 const App = () => {
-  // Função auxiliar para pegar a rota limpa do hash (ex: #/inbox -> /inbox)
   const getPathFromHash = () => {
     if (typeof window === 'undefined') return '/';
     const hash = window.location.hash.replace('#', '');
@@ -23,30 +21,20 @@ const App = () => {
 
   useEffect(() => {
     const handleHashChange = () => {
-      // Inicia a animação de saída
       setIsNavigating(true);
-      
       const newPath = getPathFromHash();
 
-      // Aguarda a transição antes de trocar o componente
       setTimeout(() => {
         setCurrentPath(newPath);
         setIsNavigating(false);
         window.scrollTo(0, 0);
-      }, 300);
+      }, 250);
     };
 
-    // Escuta nativa de mudança de hash (funciona com botões voltar/avançar)
     window.addEventListener('hashchange', handleHashChange);
-    
-    // Tratamento inicial caso a URL já venha com hash
-    if (!window.location.hash) {
-       window.location.hash = '/';
-    }
+    if (!window.location.hash) window.location.hash = '/';
 
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-    };
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, []);
 
   const renderPage = () => {
@@ -60,32 +48,15 @@ const App = () => {
 
   return (
     <RootLayout>
-      <div className={`transition-opacity duration-300 h-full ${isNavigating ? 'opacity-0' : 'opacity-100'}`}>
-        <Suspense fallback={<LoadingState />}>
-          {renderPage()}
-        </Suspense>
+      <div className={`transition-all duration-300 flex-1 flex flex-col h-full w-full min-h-0 ${isNavigating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}`}>
+        {renderPage()}
       </div>
     </RootLayout>
   );
 };
 
-const LoadingState = () => (
-  <div className="h-screen w-full flex items-center justify-center bg-[#FAF9F6]">
-    <div className="relative">
-      <div className="w-16 h-16 border-2 border-olie-300/10 border-t-olie-500 rounded-full animate-spin" />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-olie-500 font-serif italic font-black text-xl">O</span>
-      </div>
-    </div>
-  </div>
-);
-
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <App />
-    </React.StrictMode>
-  );
+  root.render(<App />);
 }

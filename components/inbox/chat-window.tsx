@@ -1,12 +1,14 @@
 
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
 import { 
   Send, Paperclip, PanelLeftClose, PanelLeftOpen, 
   PanelRightClose, PanelRightOpen, CheckCircle2,
-  Copy, Truck, Plus, ShoppingBag, Package, Sparkles
+  Copy, Truck, Plus, ShoppingBag, Package, Sparkles,
+  ChevronDown, MoreHorizontal, Loader2, QrCode
 } from 'lucide-react';
+// Importação corrigida com caminho relativo duplo para sair de 'inbox' e 'components'
 import { Message, ChannelSource } from '../../types/index.ts';
 import { OmnichannelService } from '../../services/api.ts';
 
@@ -21,6 +23,11 @@ interface ChatWindowProps {
   isRightOpen: boolean;
   onToggleRight: () => void;
   
+  // Infinite Scroll Props
+  onLoadMore?: () => void;
+  hasMore?: boolean;
+  isLoadingHistory?: boolean;
+  
   // Action Handlers
   onTriggerAction: (action: 'order' | 'catalog') => void;
 }
@@ -34,15 +41,20 @@ interface Toast {
 export const ChatWindow: React.FC<ChatWindowProps> = ({ 
   client, messages, onSendMessage, 
   isLeftOpen, onToggleLeft, isRightOpen, onToggleRight,
+  onLoadMore, hasMore, isLoadingHistory,
   onTriggerAction
 }) => {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isActionMenuOpen, setIsActionMenuOpen] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
   
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const actionMenuRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const previousScrollHeightRef = useRef<number>(0);
 
   // --- 1. Toast System ---
   const showToast = (message: string, type: 'success' | 'info' = 'success') => {
@@ -50,19 +62,64 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000); // 3 seconds duration for brevity
+    }, 3000); 
   };
 
-  // --- 2. Scroll Logic ---
-  const scrollToBottom = () => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+  // --- 2. Scroll Logic & Infinite Scroll ---
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  const handleScroll = () => {
+    if (!scrollContainerRef.current) return;
+    
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    
+    // 2.1 "Back to Bottom" Button Logic
+    const isDistanceFromBottom = scrollHeight - scrollTop - clientHeight > 300;
+    setShowScrollButton(isDistanceFromBottom);
+
+    // 2.2 Infinite Scroll Trigger (Top detection)
+    // Trigger when user scrolls close to top (e.g., < 50px)
+    if (scrollTop < 50 && hasMore && !isLoadingHistory && onLoadMore) {
+        // Save current height to restore position after render
+        previousScrollHeightRef.current = scrollHeight;
+        onLoadMore();
     }
   };
 
+  // 2.3 Restore Scroll Position after History Load
+  useLayoutEffect(() => {
+    if (!scrollContainerRef.current) return;
+    
+    const container = scrollContainerRef.current;
+    const currentScrollHeight = container.scrollHeight;
+    const prevScrollHeight = previousScrollHeightRef.current;
+
+    // If scrollHeight increased significantly (meaning items were added to top)
+    // AND we were previously tracking a history load
+    if (prevScrollHeight > 0 && currentScrollHeight > prevScrollHeight) {
+        // Calculate the difference and jump the scrollbar so the view remains stable
+        const heightDifference = currentScrollHeight - prevScrollHeight;
+        container.scrollTop = heightDifference + container.scrollTop; // Add current scrollTop to be safe
+        previousScrollHeightRef.current = 0; // Reset
+    }
+  }, [messages]); // Trigger when messages array updates
+
+  // 2.4 Initial Scroll & New Message Auto-Scroll
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, client?.id]);
+    if (!scrollContainerRef.current) return;
+    
+    const { scrollHeight, scrollTop, clientHeight } = scrollContainerRef.current;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 200;
+
+    // Only auto-scroll if it's the first load OR user is already near bottom
+    // We check !isLoadingHistory to prevent jumping to bottom when loading old messages
+    if (!isLoadingHistory && (isNearBottom || messages.length < 10)) {
+      scrollToBottom(messages.length === 0 ? 'auto' : 'smooth');
+    }
+  }, [messages, client?.id, isLoadingHistory]);
 
   // --- 3. Click Outside Action Menu ---
   useEffect(() => {
@@ -81,60 +138,58 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     if (!inputText.trim() || isSending || !client) return;
 
     setIsSending(true);
+    const textToSend = inputText;
+    setInputText('');
+    inputRef.current?.focus();
+
     try {
-      const success = await OmnichannelService.sendMessage(client.source, client.id, inputText);
+      const success = await OmnichannelService.sendMessage(client.source, client.id, textToSend);
       if (success) {
-        onSendMessage(inputText);
-        setInputText('');
+        onSendMessage(textToSend);
+        setTimeout(() => scrollToBottom(), 100);
       }
     } catch (err) {
       console.error("Erro envio");
+      setInputText(textToSend);
+      showToast("Falha ao enviar mensagem", 'info');
     } finally {
       setIsSending(false);
     }
   };
 
   const handleActionClick = (action: 'order' | 'catalog' | 'pix' | 'freight') => {
-    // 1. Close menu immediately for better UX
-    setIsActionMenuOpen(false);
-    
+    setIsActionMenuOpen(false); // Fecha o menu imediatamente
+
     switch (action) {
       case 'pix':
-        // Simulating Pix Code Generation
         const mockPixCode = "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Olie Atelie6008Sao Paulo62070503***6304E2CA";
         navigator.clipboard.writeText(mockPixCode)
-          .then(() => {
-             showToast("Link Pix copiado!", 'success');
-          })
-          .catch(() => {
-             showToast("Erro ao copiar Pix", 'info');
-          });
+          .then(() => showToast("Chave PIX copiada!", 'success'))
+          .catch(() => showToast("Erro ao copiar Pix", 'info'));
         break;
 
       case 'freight':
-        showToast("Calculando cotação Melhor Envio...", 'info');
-        
-        // Simulating API latency
+        showToast("Calculando cotação (Melhor Envio)...", 'info');
+        // Simula delay de API e envia resposta automática no chat
         setTimeout(() => {
-            showToast("Frete calculado e enviado!", 'success');
-            // Auto-send the freight quote to the chat to simulate agent efficiency
-            onSendMessage("📦 Cotação de Frete:\n\n• PAC: R$ 22,90 (5-7 dias úteis)\n• Sedex: R$ 34,50 (2-3 dias úteis)\n\nQual opção prefere?");
+            const quoteMessage = "📦 Cotação de Frete:\n\n• PAC: R$ 22,90 (5-7 dias úteis)\n• Sedex: R$ 34,50 (2-3 dias úteis)\n\nQual opção prefere?";
+            onSendMessage(quoteMessage);
+            showToast("Cotação enviada para o chat", 'success');
+            scrollToBottom();
         }, 1500);
         break;
 
-      case 'order':
-        // Triggers the modal in parent
-        onTriggerAction('order');
+      case 'order': 
+        onTriggerAction('order'); 
         break;
 
-      case 'catalog':
-        // Opens the right panel in catalog tab
-        onTriggerAction('catalog');
+      case 'catalog': 
+        onTriggerAction('catalog'); 
         break;
     }
   };
 
-  // --- 5. Data Processing (Smart Grouping & Date Separators) ---
+  // --- 5. Data Processing ---
   const safeDate = (d: string) => {
     const date = new Date(d);
     return isNaN(date.getTime()) ? new Date() : date;
@@ -154,26 +209,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const prevDate = prevMsg && prevMsg.created_at ? safeDate(prevMsg.created_at) : null;
       const nextDate = nextMsg && nextMsg.created_at ? safeDate(nextMsg.created_at) : null;
 
-      // --- DATE SEPARATOR LOGIC ---
       if (!prevDate || currDate.toDateString() !== prevDate.toDateString()) {
         const today = new Date();
         const yesterday = new Date(today);
         yesterday.setDate(today.getDate() - 1);
 
         let dateLabel = currDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
-        
-        if (currDate.toDateString() === today.toDateString()) {
-           dateLabel = 'Hoje';
-        } else if (currDate.toDateString() === yesterday.toDateString()) {
-           dateLabel = 'Ontem';
-        }
+        if (currDate.toDateString() === today.toDateString()) dateLabel = 'Hoje';
+        else if (currDate.toDateString() === yesterday.toDateString()) dateLabel = 'Ontem';
 
         items.push({ type: 'date', label: dateLabel });
       }
 
-      // --- MESSAGE GROUPING LOGIC ---
-      const TIME_THRESHOLD_MS = 5 * 60 * 1000; // 5 Minutes
-      
+      const TIME_THRESHOLD_MS = 5 * 60 * 1000;
       const isSameUserPrev = prevMsg && prevMsg.direction === msg.direction;
       const timeDiffPrev = prevDate ? currDate.getTime() - prevDate.getTime() : Infinity;
       const isFirstInGroup = !isSameUserPrev || timeDiffPrev > TIME_THRESHOLD_MS || (!prevDate || currDate.toDateString() !== prevDate.toDateString());
@@ -193,13 +241,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     return items;
   }, [messages, client]);
 
-  // --- 6. EMPTY STATE ---
+  // --- 6. RENDER ---
   if (!client) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF7] relative h-full overflow-hidden">
-         {/* Decorative BG */}
          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-[#FDFBF7] to-[#FDFBF7] z-0" />
-         
          <div className="absolute top-4 left-4 z-50">
             {!isLeftOpen && (
               <button onClick={onToggleLeft} className="p-2 bg-white border border-[#EBE8E0] rounded-xl text-stone-400 hover:text-[#C08A7D] shadow-sm transition-all hover:scale-105">
@@ -207,30 +253,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
               </button>
             )}
          </div>
-         
          <div className="relative group cursor-default z-10 text-center animate-in fade-in zoom-in-95 duration-700">
             <div className="absolute inset-0 bg-[#C08A7D]/20 blur-3xl rounded-full scale-150 animate-pulse opacity-40" />
             <div className="w-24 h-24 mx-auto bg-gradient-to-br from-[#FAF9F6] to-[#F2F0EA] rounded-[2rem] border border-[#EBE8E0] flex items-center justify-center mb-8 relative shadow-xl shadow-[#C08A7D]/10 group-hover:-translate-y-2 transition-transform duration-500">
                 <Sparkles size={32} className="text-[#C08A7D] animate-[spin_10s_linear_infinite]" strokeWidth={1} />
             </div>
-            
             <h2 className="font-serif italic text-4xl text-[#1A1A1A] mb-3">Bem-vindo ao Inbox</h2>
             <p className="text-[10px] font-black font-sans text-stone-400 uppercase tracking-[0.2em] mb-8">Selecione uma conversa para iniciar</p>
-         
-            <div className="grid grid-cols-1 gap-4 max-w-xs w-64 mx-auto opacity-30 pointer-events-none select-none">
-                <div className="h-2.5 w-full bg-[#EBE8E0] rounded-full" />
-                <div className="h-2.5 w-2/3 bg-[#EBE8E0] rounded-full mx-auto" />
-                <div className="h-2.5 w-3/4 bg-[#EBE8E0] rounded-full mx-auto" />
-            </div>
          </div>
       </div>
     );
   }
 
-  // --- MAIN RENDER ---
   return (
     <div className="flex flex-col h-full relative overflow-hidden bg-[#FDFBF7]">
-      {/* Texture Background */}
       <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none bg-[url('https://www.transparenttextures.com/patterns/cream-paper.png')]" />
       
       {/* HEADER */}
@@ -259,16 +295,13 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           </div>
         </div>
-
         <div className="flex items-center gap-2">
+           <button className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50 transition-all">
+              <MoreHorizontal size={20} />
+           </button>
            <button 
               onClick={onToggleRight}
-              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${
-                 isRightOpen 
-                   ? 'bg-[#333333] text-white shadow-lg shadow-black/10' 
-                   : 'text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50'
-              }`}
-              title={isRightOpen ? "Fechar Detalhes" : "Ver Detalhes"}
+              className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRightOpen ? 'bg-[#333333] text-white shadow-lg shadow-black/10' : 'text-stone-400 hover:text-[#C08A7D] hover:bg-stone-50'}`}
            >
               {isRightOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
            </button>
@@ -276,9 +309,22 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       </header>
 
       {/* MESSAGES AREA */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-0.5 scrollbar-hide flex flex-col z-10 relative">
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-8 py-6 space-y-0.5 scrollbar-hide flex flex-col z-10 relative scroll-smooth"
+      >
+        {/* Loading History Indicator */}
+        {isLoadingHistory && (
+          <div className="flex justify-center py-4">
+             <div className="flex items-center gap-2 px-4 py-2 bg-white/50 rounded-full shadow-sm border border-stone-100">
+               <Loader2 size={14} className="animate-spin text-[#C08A7D]" />
+               <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">Carregando histórico...</span>
+             </div>
+          </div>
+        )}
+
         {processedItems.map((item, idx) => {
-          
           if (item.type === 'date') return (
             <div key={`date-${idx}`} className="flex justify-center py-6 sticky top-0 z-30 pointer-events-none">
               <span className="px-4 py-1.5 bg-[#FDFBF7]/90 backdrop-blur-md border border-[#EBE8E0] rounded-full text-[9px] font-black text-stone-400 uppercase tracking-[0.2em] shadow-sm select-none">
@@ -288,7 +334,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
           );
 
           const isMe = item.isMe;
-          
           let radiusClass = '';
           if (isMe) {
             radiusClass = `rounded-l-[1.4rem] ${item.isFirstInGroup ? 'rounded-tr-[1.4rem]' : 'rounded-tr-[2px]'} ${item.isLastInGroup ? 'rounded-br-[1.4rem]' : 'rounded-br-[2px]'}`;
@@ -300,8 +345,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
           return (
             <div key={item.id} className={`flex w-full ${isMe ? 'justify-end' : 'justify-start'} ${marginClass} animate-in fade-in slide-in-from-bottom-1 duration-300`}>
-              <div className={`flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'}`}>
-                
+              <div className={`flex flex-col max-w-[70%] ${isMe ? 'items-end' : 'items-start'} group`}>
                 <div className={`px-5 py-3 text-[14px] font-medium leading-relaxed shadow-sm relative transition-all hover:shadow-md ${
                   isMe 
                     ? 'bg-gradient-to-br from-olie-500 to-olie-700 text-white shadow-md shadow-olie-500/20 ' + radiusClass 
@@ -309,49 +353,72 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 }`}>
                   <p className="whitespace-pre-wrap">{item.content}</p>
                 </div>
-
-                {item.isLastInGroup && (
+                <div className={`overflow-hidden transition-all duration-300 ${item.isLastInGroup ? 'max-h-10 opacity-100' : 'max-h-0 opacity-0 group-hover:max-h-10 group-hover:opacity-100'}`}>
                   <span className={`text-[9px] font-bold text-stone-300 uppercase mt-1 px-1 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'items-start'}`}>
                     {safeDate(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
                     {isMe && <CheckCircle2 size={10} className="text-[#C08A7D]" />}
                   </span>
-                )}
+                </div>
               </div>
             </div>
           );
         })}
+        <div ref={messagesEndRef} className="h-4" />
       </div>
+      
+      {/* Scroll To Bottom Button */}
+      {showScrollButton && (
+        <button 
+          onClick={() => scrollToBottom()}
+          className="absolute bottom-24 right-8 z-50 p-3 bg-white border border-[#EBE8E0] rounded-full text-stone-400 hover:text-[#C08A7D] shadow-lg hover:-translate-y-1 transition-all animate-in zoom-in"
+        >
+          <ChevronDown size={20} />
+        </button>
+      )}
 
       {/* FOOTER & ACTION MENU */}
       <div className="px-6 py-4 bg-white border-t border-[#F2F0EA] z-40 shrink-0 relative">
-        
-        {/* ACTION MENU POPUP */}
         {isActionMenuOpen && (
-          <div ref={actionMenuRef} className="absolute bottom-20 left-6 w-56 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#F2F0EA] overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
-             <div className="p-1.5 space-y-0.5">
+          <div ref={actionMenuRef} className="absolute bottom-20 left-6 w-64 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#F2F0EA] overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
+             <div className="p-2 space-y-1">
+                {/* Ações de Venda */}
                 <button onClick={() => handleActionClick('order')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
                    <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><ShoppingBag size={14} /></div>
-                   <span className="text-[11px] font-black uppercase tracking-wide">Novo Pedido</span>
+                   <div className="flex flex-col">
+                      <span className="text-[11px] font-black uppercase tracking-wide">Novo Pedido</span>
+                      <span className="text-[9px] text-stone-400">Criar pedido manual</span>
+                   </div>
                 </button>
                 <button onClick={() => handleActionClick('catalog')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
                    <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><Package size={14} /></div>
-                   <span className="text-[11px] font-black uppercase tracking-wide">Abrir Catálogo</span>
+                   <div className="flex flex-col">
+                      <span className="text-[11px] font-black uppercase tracking-wide">Abrir Catálogo</span>
+                      <span className="text-[9px] text-stone-400">Ver produtos e estoque</span>
+                   </div>
                 </button>
-                <div className="h-px bg-stone-100 my-1" />
+
+                <div className="h-px bg-stone-100 my-1 mx-2" />
+                
+                {/* Utilitários */}
                 <button onClick={() => handleActionClick('pix')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-emerald-500 group-hover:text-white transition-all"><Copy size={14} /></div>
-                   <span className="text-[11px] font-black uppercase tracking-wide">Gerar Link Pix</span>
+                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-emerald-500 group-hover:text-white transition-all"><QrCode size={14} /></div>
+                   <div className="flex flex-col">
+                      <span className="text-[11px] font-black uppercase tracking-wide">Gerar Link Pix</span>
+                      <span className="text-[9px] text-stone-400">Copiar código de pagamento</span>
+                   </div>
                 </button>
                 <button onClick={() => handleActionClick('freight')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
                    <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-blue-500 group-hover:text-white transition-all"><Truck size={14} /></div>
-                   <span className="text-[11px] font-black uppercase tracking-wide">Consultar Frete</span>
+                   <div className="flex flex-col">
+                      <span className="text-[11px] font-black uppercase tracking-wide">Consultar Frete</span>
+                      <span className="text-[9px] text-stone-400">Calcular via Melhor Envio</span>
+                   </div>
                 </button>
              </div>
           </div>
         )}
 
         <form onSubmit={handleSubmit} className="flex items-center gap-3 bg-[#FAF9F6] border border-[#F2F0EA] rounded-[1.5rem] p-1.5 pr-2 focus-within:ring-2 focus-within:ring-[#C08A7D]/10 focus-within:border-[#C08A7D]/30 transition-all shadow-inner">
-           
            <button 
               type="button" 
               onClick={() => setIsActionMenuOpen(!isActionMenuOpen)}
@@ -360,29 +427,27 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
            >
               <Plus size={18} />
            </button>
-
            <input 
+              ref={inputRef}
               value={inputText} 
               onChange={e => setInputText(e.target.value)} 
               placeholder="Escreva sua mensagem..." 
+              autoFocus
               className="flex-1 bg-transparent outline-none text-stone-700 placeholder:text-stone-300 h-full py-2.5 text-sm font-medium" 
            />
-           
            <button type="button" className="w-9 h-9 rounded-full flex items-center justify-center text-stone-400 hover:text-[#C08A7D] hover:bg-white transition-all">
               <Paperclip size={18} />
            </button>
-           
            <button 
               type="submit" 
               disabled={!inputText.trim() || isSending} 
               className="w-9 h-9 bg-[#C08A7D] text-white rounded-full flex items-center justify-center shadow-md hover:bg-[#A67569] disabled:opacity-50 disabled:shadow-none transition-all transform hover:scale-105 active:scale-95"
            >
-              <Send size={16} className="ml-0.5" />
+              {isSending ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Send size={16} className="ml-0.5" />}
            </button>
         </form>
       </div>
 
-      {/* TOAST NOTIFICATIONS CONTAINER */}
       <div className="absolute bottom-24 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 w-max pointer-events-none">
          {toasts.map(toast => (
             <div key={toast.id} className="bg-[#333333] text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-3 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto border border-white/10">

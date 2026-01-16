@@ -50,7 +50,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     setToasts(prev => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, 4000);
+    }, 3000); // 3 seconds duration for brevity
   };
 
   // --- 2. Scroll Logic ---
@@ -95,22 +95,40 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   };
 
   const handleActionClick = (action: 'order' | 'catalog' | 'pix' | 'freight') => {
+    // 1. Close menu immediately for better UX
     setIsActionMenuOpen(false);
     
     switch (action) {
       case 'pix':
+        // Simulating Pix Code Generation
         const mockPixCode = "00020126580014BR.GOV.BCB.PIX0136123e4567-e89b-12d3-a456-426614174000520400005303986540510.005802BR5913Olie Atelie6008Sao Paulo62070503***6304E2CA";
-        navigator.clipboard.writeText(mockPixCode).then(() => {
-           showToast("Link Pix copiado para a área de transferência!", 'success');
-        });
+        navigator.clipboard.writeText(mockPixCode)
+          .then(() => {
+             showToast("Link Pix copiado!", 'success');
+          })
+          .catch(() => {
+             showToast("Erro ao copiar Pix", 'info');
+          });
         break;
+
       case 'freight':
-        showToast("Cotação de frete solicitada (Melhor Envio)", 'info');
+        showToast("Calculando cotação Melhor Envio...", 'info');
+        
+        // Simulating API latency
+        setTimeout(() => {
+            showToast("Frete calculado e enviado!", 'success');
+            // Auto-send the freight quote to the chat to simulate agent efficiency
+            onSendMessage("📦 Cotação de Frete:\n\n• PAC: R$ 22,90 (5-7 dias úteis)\n• Sedex: R$ 34,50 (2-3 dias úteis)\n\nQual opção prefere?");
+        }, 1500);
         break;
+
       case 'order':
+        // Triggers the modal in parent
         onTriggerAction('order');
         break;
+
       case 'catalog':
+        // Opens the right panel in catalog tab
         onTriggerAction('catalog');
         break;
     }
@@ -137,7 +155,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       const nextDate = nextMsg && nextMsg.created_at ? safeDate(nextMsg.created_at) : null;
 
       // --- DATE SEPARATOR LOGIC ---
-      // Insert a separator if it's the first message OR if the day changed from the previous message
       if (!prevDate || currDate.toDateString() !== prevDate.toDateString()) {
         const today = new Date();
         const yesterday = new Date(today);
@@ -145,7 +162,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
         let dateLabel = currDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' });
         
-        // Smart Labels
         if (currDate.toDateString() === today.toDateString()) {
            dateLabel = 'Hoje';
         } else if (currDate.toDateString() === yesterday.toDateString()) {
@@ -160,13 +176,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       
       const isSameUserPrev = prevMsg && prevMsg.direction === msg.direction;
       const timeDiffPrev = prevDate ? currDate.getTime() - prevDate.getTime() : Infinity;
-      
-      // Determine geometry based on neighbors
       const isFirstInGroup = !isSameUserPrev || timeDiffPrev > TIME_THRESHOLD_MS || (!prevDate || currDate.toDateString() !== prevDate.toDateString());
 
       const isSameUserNext = nextMsg && nextMsg.direction === msg.direction;
       const timeDiffNext = nextDate ? nextDate.getTime() - currDate.getTime() : Infinity;
-      
       const isLastInGroup = !isSameUserNext || timeDiffNext > TIME_THRESHOLD_MS || (nextDate && currDate.toDateString() !== nextDate.toDateString());
 
       items.push({ 
@@ -184,6 +197,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
   if (!client) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-[#FDFBF7] relative h-full overflow-hidden">
+         {/* Decorative BG */}
          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white via-[#FDFBF7] to-[#FDFBF7] z-0" />
          
          <div className="absolute top-4 left-4 z-50">
@@ -194,7 +208,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             )}
          </div>
          
-         <div className="relative group cursor-default z-10 text-center">
+         <div className="relative group cursor-default z-10 text-center animate-in fade-in zoom-in-95 duration-700">
             <div className="absolute inset-0 bg-[#C08A7D]/20 blur-3xl rounded-full scale-150 animate-pulse opacity-40" />
             <div className="w-24 h-24 mx-auto bg-gradient-to-br from-[#FAF9F6] to-[#F2F0EA] rounded-[2rem] border border-[#EBE8E0] flex items-center justify-center mb-8 relative shadow-xl shadow-[#C08A7D]/10 group-hover:-translate-y-2 transition-transform duration-500">
                 <Sparkles size={32} className="text-[#C08A7D] animate-[spin_10s_linear_infinite]" strokeWidth={1} />
@@ -265,7 +279,6 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-8 py-6 space-y-0.5 scrollbar-hide flex flex-col z-10 relative">
         {processedItems.map((item, idx) => {
           
-          // --- RENDER DATE SEPARATOR (STICKY) ---
           if (item.type === 'date') return (
             <div key={`date-${idx}`} className="flex justify-center py-6 sticky top-0 z-30 pointer-events-none">
               <span className="px-4 py-1.5 bg-[#FDFBF7]/90 backdrop-blur-md border border-[#EBE8E0] rounded-full text-[9px] font-black text-stone-400 uppercase tracking-[0.2em] shadow-sm select-none">
@@ -274,16 +287,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
             </div>
           );
 
-          // --- RENDER MESSAGE BUBBLE ---
           const isMe = item.isMe;
           
-          // Adaptive Geometry: Smart Border Radius
           let radiusClass = '';
           if (isMe) {
-            // My messages
             radiusClass = `rounded-l-[1.4rem] ${item.isFirstInGroup ? 'rounded-tr-[1.4rem]' : 'rounded-tr-[2px]'} ${item.isLastInGroup ? 'rounded-br-[1.4rem]' : 'rounded-br-[2px]'}`;
           } else {
-            // Their messages
             radiusClass = `rounded-r-[1.4rem] ${item.isFirstInGroup ? 'rounded-tl-[1.4rem]' : 'rounded-tl-[2px]'} ${item.isLastInGroup ? 'rounded-bl-[1.4rem]' : 'rounded-bl-[2px]'}`;
           }
 
@@ -295,13 +304,12 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 
                 <div className={`px-5 py-3 text-[14px] font-medium leading-relaxed shadow-sm relative transition-all hover:shadow-md ${
                   isMe 
-                    ? 'bg-gradient-to-br from-olie-500 to-olie-700 text-white ' + radiusClass 
+                    ? 'bg-gradient-to-br from-olie-500 to-olie-700 text-white shadow-md shadow-olie-500/20 ' + radiusClass 
                     : 'bg-white text-stone-700 border border-[#F2F0EA] ' + radiusClass
                 }`}>
                   <p className="whitespace-pre-wrap">{item.content}</p>
                 </div>
 
-                {/* Metadata: Only on the last message of the group */}
                 {item.isLastInGroup && (
                   <span className={`text-[9px] font-bold text-stone-300 uppercase mt-1 px-1 flex items-center gap-1.5 ${isMe ? 'justify-end' : 'items-start'}`}>
                     {safeDate(item.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} 
@@ -319,7 +327,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         
         {/* ACTION MENU POPUP */}
         {isActionMenuOpen && (
-          <div ref={actionMenuRef} className="absolute bottom-20 left-6 w-56 bg-white rounded-2xl shadow-2xl border border-[#F2F0EA] overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
+          <div ref={actionMenuRef} className="absolute bottom-20 left-6 w-56 bg-white/95 backdrop-blur-xl rounded-2xl shadow-2xl border border-[#F2F0EA] overflow-hidden animate-in slide-in-from-bottom-2 fade-in duration-200 z-50">
              <div className="p-1.5 space-y-0.5">
                 <button onClick={() => handleActionClick('order')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
                    <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><ShoppingBag size={14} /></div>
@@ -331,11 +339,11 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                 </button>
                 <div className="h-px bg-stone-100 my-1" />
                 <button onClick={() => handleActionClick('pix')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><Copy size={14} /></div>
-                   <span className="text-[11px] font-black uppercase tracking-wide">Gerar Pix</span>
+                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-emerald-500 group-hover:text-white transition-all"><Copy size={14} /></div>
+                   <span className="text-[11px] font-black uppercase tracking-wide">Gerar Link Pix</span>
                 </button>
                 <button onClick={() => handleActionClick('freight')} className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-[#FAF9F6] rounded-xl transition-colors text-stone-600 hover:text-[#C08A7D] group">
-                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-[#C08A7D] group-hover:text-white transition-all"><Truck size={14} /></div>
+                   <div className="w-8 h-8 rounded-full bg-stone-50 flex items-center justify-center text-stone-400 group-hover:bg-blue-500 group-hover:text-white transition-all"><Truck size={14} /></div>
                    <span className="text-[11px] font-black uppercase tracking-wide">Consultar Frete</span>
                 </button>
              </div>

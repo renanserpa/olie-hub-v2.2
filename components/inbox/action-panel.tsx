@@ -4,7 +4,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
   X, User, ShoppingBag, Package, ClipboardCopy, 
-  Truck, ChevronRight, ChevronLeft, Star, Clock 
+  Truck, ChevronRight, ChevronLeft, Star, Clock,
+  Eye, Send, CheckCircle2
 } from 'lucide-react';
 import { Product, Order } from '../../types/index.ts';
 
@@ -21,6 +22,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   onClose, client, catalog, recentOrders, forcedTab
 }) => {
   const [activeTab, setActiveTab] = useState<'crm' | 'orders' | 'catalog'>('crm');
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -42,6 +44,11 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     alert("Calculando frete via Correios/Melhor Envio...");
   };
 
+  const handleSendProduct = () => {
+     alert(`Produto ${quickViewProduct?.name} enviado para o chat.`);
+     setQuickViewProduct(null);
+  };
+
   // Pagination Logic
   const totalPages = Math.ceil(catalog.length / ITEMS_PER_PAGE);
   const currentProducts = catalog.slice(
@@ -50,7 +57,7 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
   );
 
   return (
-    <div className="h-full bg-white flex flex-col overflow-hidden w-full">
+    <div className="h-full bg-white flex flex-col overflow-hidden w-full relative">
       {/* Header Fixo */}
       <div className="h-16 px-6 border-b border-[#F2F0EA] flex items-center justify-between shrink-0 bg-white z-20">
         <span className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400">Contexto</span>
@@ -160,12 +167,20 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
            <div className="flex flex-col h-full animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="grid grid-cols-2 gap-3 flex-1 content-start">
                   {currentProducts.map(product => (
-                     <div key={product.id} className="group cursor-pointer">
+                     <div key={product.id} className="group cursor-pointer" onClick={() => setQuickViewProduct(product)}>
                         <div className="aspect-square rounded-2xl overflow-hidden bg-[#FAF9F6] mb-2 relative">
-                           <img src={product.image_url} alt={product.name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
-                           <button className="absolute bottom-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center text-[#C08A7D] shadow-md opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0">
-                              <ClipboardCopy size={14} />
-                           </button>
+                           <img 
+                              src={product.image_url} 
+                              alt={product.name} 
+                              className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ease-out" 
+                           />
+                           
+                           {/* Hover Overlay */}
+                           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                              <div className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center text-stone-800 shadow-xl transform scale-50 group-hover:scale-100 transition-all duration-300">
+                                 <Eye size={18} />
+                              </div>
+                           </div>
                         </div>
                         <h4 className="text-[10px] font-black uppercase tracking-wide text-stone-700 truncate">{product.name}</h4>
                         <p className="text-[10px] text-stone-400">R$ {product.base_price.toFixed(2)}</p>
@@ -219,6 +234,71 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
             </button>
          </div>
       </div>
+
+      {/* QUICK VIEW MODAL (Fixed Overlay) */}
+      {quickViewProduct && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+           {/* Backdrop */}
+           <div 
+             className="absolute inset-0 bg-stone-900/40 backdrop-blur-sm animate-in fade-in duration-300"
+             onClick={() => setQuickViewProduct(null)}
+           />
+           
+           {/* Modal Content */}
+           <div className="relative bg-white rounded-[2rem] w-full max-w-sm shadow-2xl overflow-hidden animate-in zoom-in-95 duration-300">
+              <button 
+                 onClick={() => setQuickViewProduct(null)}
+                 className="absolute top-4 right-4 w-8 h-8 bg-white/50 backdrop-blur-md rounded-full flex items-center justify-center text-stone-600 z-10 hover:bg-white transition-colors"
+              >
+                 <X size={16} />
+              </button>
+
+              <div className="h-64 bg-stone-100 relative">
+                 <img src={quickViewProduct.image_url} className="w-full h-full object-cover" />
+                 <div className="absolute bottom-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm">
+                    {quickViewProduct.sku_base}
+                 </div>
+              </div>
+
+              <div className="p-6 space-y-6">
+                 <div>
+                    <h3 className="text-2xl font-serif italic text-[#1A1A1A] mb-1">{quickViewProduct.name}</h3>
+                    <p className="text-stone-400 font-medium text-lg">R$ {quickViewProduct.base_price.toFixed(2)}</p>
+                 </div>
+
+                 <div className="space-y-3">
+                    <p className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Cores Disponíveis</p>
+                    <div className="flex gap-2">
+                       {quickViewProduct.options.colors.map(color => (
+                          <div 
+                             key={color.value} 
+                             className="w-6 h-6 rounded-full border border-stone-200 shadow-sm"
+                             style={{ backgroundColor: color.hex }}
+                             title={color.label}
+                          />
+                       ))}
+                    </div>
+                 </div>
+
+                 <div className="space-y-3">
+                     <p className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Ferragens</p>
+                     <div className="flex gap-2">
+                        {quickViewProduct.options.hardware.map(hw => (
+                           <span key={hw} className="px-2 py-1 bg-stone-50 border border-stone-100 rounded text-[10px] text-stone-500 font-medium">{hw}</span>
+                        ))}
+                     </div>
+                 </div>
+
+                 <button 
+                    onClick={handleSendProduct}
+                    className="w-full py-4 bg-[#C08A7D] text-white rounded-xl flex items-center justify-center gap-2 font-black uppercase text-[10px] tracking-widest hover:bg-[#A67569] shadow-lg shadow-[#C08A7D]/20 transition-all active:scale-95"
+                 >
+                    <Send size={14} /> Enviar para Conversa
+                 </button>
+              </div>
+           </div>
+        </div>
+      )}
     </div>
   );
 };

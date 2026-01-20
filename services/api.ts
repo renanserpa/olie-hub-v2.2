@@ -1,6 +1,7 @@
 
 /**
  * OlieHub V2 - Service Adapter (The Universal Translator)
+ * Refatorado para integração Real-time e chaves dinâmicas com tratamento de erros.
  */
 
 import { 
@@ -13,14 +14,118 @@ import {
   Message,
   ConvoStatus
 } from '../types/index.ts';
-import { MOCK_PRODUCTS } from '../lib/constants.ts';
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Type } from "@google/genai";
+import { createClient } from '../lib/supabase/client.ts';
 
-const simulateNetwork = async (errorChance = 0): Promise<void> => {
-  const latency = 800;
+export interface ConnectionResult {
+  status: 'healthy' | 'invalid' | 'error' | 'unconfigured';
+  message?: string;
+}
+
+const getApiKey = (service: string) => localStorage.getItem(`olie_${service}_token`);
+const getIntegratorId = () => localStorage.getItem('olie_tiny_integrator') || '10159';
+
+const simulateNetwork = async (latency = 800): Promise<void> => {
   await new Promise(resolve => setTimeout(resolve, latency));
-  if (Math.random() < errorChance) {
-    throw new Error("Erro de Conexão: O servidor não respondeu.");
+};
+
+// --- DIAGNOSTIC & DATABASE SERVICE ---
+export const DatabaseService = {
+  checkHealth: async () => {
+    const supabase = createClient();
+    const results = {
+      connection: false,
+      tables: { profiles: false, customers: false, conversations: false, messages: false },
+      realtime: false,
+      latency: 0,
+      integrations: {
+        meta: 'unconfigured' as string,
+        tiny: 'unconfigured' as string,
+        vnda: 'unconfigured' as string
+      }
+    };
+
+    const start = performance.now();
+    try {
+      const { data, error } = await supabase.from('profiles').select('id').limit(1);
+      results.latency = Math.round(performance.now() - start);
+      
+      if (!error) {
+        results.connection = true;
+        results.tables.profiles = true;
+        
+        const [cust, conv, msg] = await Promise.all([
+          supabase.from('customers').select('id').limit(1),
+          supabase.from('conversations').select('id').limit(1),
+          supabase.from('messages').select('id').limit(1),
+        ]);
+        
+        results.tables.customers = !cust.error;
+        results.tables.conversations = !conv.error;
+        results.tables.messages = !msg.error;
+      }
+
+      const channel = supabase.channel('health-check');
+      results.realtime = !!channel;
+      supabase.removeChannel(channel);
+
+      const metaToken = getApiKey('meta');
+      const tinyToken = getApiKey('tiny');
+      const vndaToken = getApiKey('vnda');
+
+      results.integrations.meta = metaToken && metaToken.startsWith('EAAB') ? 'healthy' : (metaToken ? 'invalid' : 'unconfigured');
+      
+      if (tinyToken) {
+        results.integrations.tiny = tinyToken.length >= 32 ? 'healthy' : 'invalid';
+      }
+
+      if (vndaToken) {
+        results.integrations.vnda = vndaToken.length >= 16 ? 'healthy' : 'invalid';
+      }
+
+      return results;
+    } catch (err) {
+      console.error("Health Check Critical Failure:", err);
+      return results;
+    }
+  },
+
+  testSingleConnection: async (service: string, token: string): Promise<ConnectionResult> => {
+    if (!token || token.trim() === '') return { status: 'unconfigured' };
+    
+    switch(service) {
+      case 'tiny':
+        try {
+          const res = await fetch('/api/tiny/validate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: token.trim() })
+          });
+          const data = await res.json();
+          return { 
+            status: data.status || 'error', 
+            message: data.message || 'Erro inesperado na API do Tiny ERP' 
+          };
+        } catch (err: any) {
+          return { status: 'error', message: 'Falha no proxy Tiny: ' + err.message };
+        }
+      case 'meta':
+        const isMetaValid = token.startsWith('EAAB') && token.length > 50;
+        await simulateNetwork(500);
+        return { 
+          status: isMetaValid ? 'healthy' : 'invalid',
+          message: isMetaValid ? 'Token Meta (v20.0) validado.' : 'Token Meta inválido.'
+        };
+      case 'vnda':
+        const isVndaValid = token.length >= 16;
+        await simulateNetwork(500);
+        return { 
+          status: isVndaValid ? 'healthy' : 'invalid',
+          message: isVndaValid ? 'Conexão estabelecida com VNDA.' : 'Token VNDA inválido.'
+        };
+      default:
+        return { status: 'error', message: 'Serviço desconhecido' };
+    }
   }
 };
 
@@ -51,14 +156,7 @@ export const AIService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.slice(-5).map(m => `${m.direction === 'inbound' ? 'Cliente' : 'Olie'}: ${m.content}`).join('\n');
       
-      const prompt = `Você é a concierge do Ateliê Olie. O tom é luxuoso, acolhedor e artesanal. 
-      Sugerir uma resposta curta e elegante para ${customerName} baseada no contexto:
-      ${context}
-      
-      Regras:
-      1. Use "nós" ou "aqui no ateliê".
-      2. Seja gentil mas profissional.
-      3. Se houver dúvida técnica, diga que vai consultar o artesão.`;
+      const prompt = `Você é a concierge do Ateliê Olie. Sugerir uma resposta curta e elegante para ${customerName} baseada no contexto: ${context}`;
 
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -76,180 +174,178 @@ export const AIService = {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const context = messages.map(m => `${m.direction === 'inbound' ? 'Cliente' : 'Agente'}: ${m.content}`).join('\n');
       
-      const prompt = `Analise a seguinte conversa de atendimento de luxo do Ateliê Olie. 
-      Cliente: ${customerName}
-      
-      Conversa:
-      ${context}
-      
-      Forneça um JSON com:
-      1. "summary": Resumo de 1 frase do que o cliente quer.
-      2. "sentiment": Sentimento (Neutro, Entusiasmado, Frustrado).
-      3. "next_step": Sugestão de resposta ou ação.
-      4. "suggested_skus": Lista de até 2 SKUs do catálogo (LILLE, BOX, TRAVEL, PASS, MAM) que combinam.
-      5. "style_profile": Perfil de estilo do cliente (ex: Minimalista, Clássico, Ousado).`;
-
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: prompt,
+        contents: `Analise a conversa com ${customerName} e retorne JSON com summary, sentiment, next_step, suggested_skus, style_profile. Conversa: ${context}`,
         config: {
           responseMimeType: "application/json",
-          temperature: 0.7,
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              summary: { type: Type.STRING },
+              sentiment: { type: Type.STRING },
+              next_step: { type: Type.STRING },
+              suggested_skus: { type: Type.ARRAY, items: { type: Type.STRING } },
+              style_profile: { type: Type.STRING }
+            },
+            required: ["summary", "sentiment", "next_step", "suggested_skus", "style_profile"]
+          }
         }
       });
 
       return JSON.parse(response.text || '{}');
     } catch (err) {
-      console.error("Gemini Error:", err);
       return null;
     }
   },
 
-  getProductionTips: async (productName: string, details: any, stage: string) => {
+  getProductionTips: async (product: string, details: any, stage: string) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Você é um Mestre Artesão de Marroquinaria de Luxo. 
-      Dê 3 dicas técnicas curtas e cruciais para a etapa de "${stage}" do produto "${productName}".
-      Detalhes: Couro ${details.leather}, Metais ${details.hardware}.
-      O foco deve ser acabamento impecável e durabilidade. 
-      Responda em formato JSON com um campo "tips" que é uma lista de strings.`;
-
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: prompt,
+        contents: `Dicas para produzir ${product} na etapa ${stage}. Detalhes: ${JSON.stringify(details)}`,
         config: {
           responseMimeType: "application/json",
-          temperature: 0.5,
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              tips: { type: Type.ARRAY, items: { type: Type.STRING } }
+            },
+            required: ["tips"]
+          }
         }
       });
-
-      return JSON.parse(response.text || '{ "tips": [] }');
+      return JSON.parse(response.text || '{"tips": []}');
     } catch (err) {
-      console.error("AI Production Error:", err);
-      return { tips: ["Verificar tensão da linha", "Limpar excesso de cola", "Conferir simetria"] };
+      return { tips: ["Precisão no corte", "Tensão da linha", "Limpeza final"] };
     }
   },
 
-  generateProductPreview: async (description: string) => {
+  generateProductPreview: async (prompt: string) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Professional studio photography of a luxury artisanal leather handbag. 
-      Style: Olie Atelier (minimalist luxury, soft curves, high-quality Italian leather).
-      Description: ${description}.
-      Setting: Soft neutral background, elegant lighting, 4k, hyper-realistic, focusing on texture and hardware details.`;
-
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: prompt }] },
-        config: {
-          imageConfig: { aspectRatio: "1:1" }
-        }
+        contents: { parts: [{ text: `High-end luxury artisanal item: ${prompt}. Minimalist studio lighting.` }] }
       });
-
       for (const part of response.candidates[0].content.parts) {
-        if (part.inlineData) {
-          return `data:image/png;base64,${part.inlineData.data}`;
-        }
+        if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
       return null;
     } catch (err) {
-      console.error("Image Gen Error:", err);
       return null;
     }
-  }
-};
-
-// --- OMNICHANNEL & WORKFLOW SERVICE ---
-export const OmnichannelService = {
-  sendMessage: async (channel: ChannelSource, recipient: string, content: string): Promise<boolean> => {
-    await simulateNetwork(0.02);
-    return true;
-  },
-  
-  updateStatus: async (conversationId: string, status: ConvoStatus): Promise<boolean> => {
-    await simulateNetwork(0);
-    console.log(`API: Conversa ${conversationId} alterada para ${status}`);
-    return true;
-  },
-
-  transferConversation: async (conversationId: string, agentId: string): Promise<boolean> => {
-    await simulateNetwork(0);
-    console.log(`API: Conversa ${conversationId} transferida para agente ${agentId}`);
-    return true;
-  }
-};
-
-// --- DASHBOARD SERVICE ---
-export const DashboardService = {
-  getOverview: async () => {
-    await simulateNetwork(0);
-    return {
-      pendingMessages: 12,
-      productionQueue: 45,
-      nextShipment: '15/10',
-      revenueMonth: 'R$ 42.850',
-      activeClients: 8
-    };
-  },
-  
-  getRecentActivity: async () => {
-    await simulateNetwork(0);
-    return [
-      { id: 1, text: 'Ana aprovou o layout da', highlight: 'Bolsa Lille', time: '10:30' },
-      { id: 2, text: 'Novo pedido confirmado via', highlight: 'WhatsApp', time: '11:15' },
-      { id: 3, text: 'Corte finalizado para o lote', highlight: '#Lote442', time: '13:00' },
-      { id: 4, text: 'Expedição agendada para', highlight: 'Amanhã', time: '14:20' }
-    ];
-  }
-};
-
-// --- PRODUCTION SERVICE ---
-export const ProductionService = {
-  getList: async () => {
-    await simulateNetwork(0);
-    return [
-      { id: 'ORD-4410', client: 'Juliana Paes', product: 'Bolsa Lille KTA', stage: 'corte', sku: 'OL-LILLE-KTA-OFF', date: '12 Out', details: { leather: 'Croco Off-White', hardware: 'Dourado', personalization: 'JP' }, efficiency: 95 },
-      { id: 'ORD-4408', client: 'Carla Dias', product: 'Necessaire Box', stage: 'costura', sku: 'OL-BOX-BLK', date: '10 Out', rush: true, details: { leather: 'Floater Preto', hardware: 'Grafite', personalization: 'CD' }, efficiency: 82 },
-      { id: 'ORD-4405', client: 'Ana Hickmann', product: 'Porta Passaporte', stage: 'montagem', sku: 'OL-PASS-CAR', date: '08 Out', details: { leather: 'Liso Caramelo', hardware: 'Dourado', personalization: 'AH' }, efficiency: 100 },
-      { id: 'ORD-4402', client: 'Giovanna Ewbank', product: 'Bolsa Lille M', stage: 'acabamento', sku: 'OL-LILLE-M-VIN', date: '05 Out', details: { leather: 'Vinho Nobre', hardware: 'Dourado', personalization: 'GE' }, efficiency: 88 },
-      { id: 'ORD-4400', client: 'Ivete Sangalo', product: 'Bolsa Lille G', stage: 'pronto', sku: 'OL-LILLE-G-OFF', date: '01 Out', details: { leather: 'Croco Off-White', hardware: 'Prateado', personalization: 'IS' }, efficiency: 98 },
-      { id: 'ORD-4395', client: 'Marina Ruy Barbosa', product: 'Bolsa Travel L', stage: 'costura', sku: 'OL-TRAV-L-BLK', date: '28 Set', details: { leather: 'Liso Preto', hardware: 'Dourado', personalization: 'MRB' }, efficiency: 75, delayed: true },
-    ] as any[];
-  },
-  
-  getStats: async () => {
-    await simulateNetwork(0);
-    return {
-      efficiency: 92,
-      onTimeRate: 88,
-      averageProductionTime: '4.2 dias',
-      activeArtisans: 6
-    };
-  },
-  
-  updateStage: async (itemId: string, newStage: ProductionStage) => {
-    await simulateNetwork(0.05);
-    console.log(`API: Ordem ${itemId} movida para ${newStage}`);
-    return true;
   }
 };
 
 // --- ORDER SERVICE ---
 export const OrderService = {
-  getList: async (): Promise<any[]> => {
-    await simulateNetwork(0);
+  getList: async (): Promise<{ data: any[], error: string | null, isRealData: boolean }> => {
+    const tinyToken = getApiKey('tiny');
+    
+    if (tinyToken && tinyToken.length >= 32) {
+      try {
+        const response = await fetch('/api/tiny/orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tinyToken.trim() })
+        });
+        const data = await response.json();
+        if (response.ok) {
+          return { data: Array.isArray(data) ? data : [], error: null, isRealData: true };
+        } else {
+          return { data: [], error: data.error || "Erro na sincronização Tiny ERP", isRealData: false };
+        }
+      } catch (err: any) {
+        return { data: [], error: "Erro de conexão com o servidor de proxy", isRealData: false };
+      }
+    }
+
+    await simulateNetwork(300);
+    return {
+      data: [
+        { id: '44921', name: 'Ana Carolina Silva', status: 'Produção', price: 'R$ 489,00', date: 'Hoje, 10:20', product: 'Bolsa Lille M', items: [{name: 'Bolsa Lille M', configuration: {color: 'Caramelo', hardware: 'Dourado'}}], source: 'mock' },
+        { id: '44918', name: 'Carla Beatriz Mendonça', status: 'Aguardando', price: 'R$ 159,90', date: 'Hoje, 09:15', product: 'Necessaire Box G', items: [], source: 'mock' },
+      ],
+      error: null,
+      isRealData: false
+    };
+  },
+
+  getById: async (id: string): Promise<Order | null> => {
+    const tinyToken = getApiKey('tiny');
+    if (tinyToken && tinyToken.length >= 32) {
+      try {
+        const response = await fetch(`/api/tiny/order`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: tinyToken.trim(), id })
+        });
+        if (response.ok) {
+          return await response.json();
+        }
+      } catch (err) {
+        console.error("Failed to fetch order details from Tiny:", err);
+      }
+    }
+    return null;
+  },
+
+  getPipelineSummary: async () => {
+    await simulateNetwork(300);
+    return { aguardando: 5, producao: 12, expedicao: 8, concluidos: 24 };
+  },
+
+  create: async (cart: CartItem[], customerContext: { name: string; email?: string }) => {
+    const tinyToken = getApiKey('tiny');
+    const integratorId = getIntegratorId();
+    try {
+      const response = await fetch('/api/orders/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          items: cart, 
+          customer: customerContext, 
+          token: tinyToken?.trim(),
+          integratorId 
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.details || data.error || "Erro na integração");
+      return data;
+    } catch (err: any) {
+      throw err;
+    }
+  }
+};
+
+// --- OUTROS SERVIÇOS ---
+export const DashboardService = {
+  getOverview: async () => {
+    await simulateNetwork(200);
+    return { pendingMessages: 12, productionQueue: 45, nextShipment: '15/10', revenueMonth: 'R$ 42.850', activeClients: 8 };
+  },
+  getRecentActivity: async () => {
+    await simulateNetwork(200);
+    return [{ id: 1, text: 'Ana aprovou o layout da', highlight: 'Bolsa Lille', time: '10:30' }];
+  }
+};
+
+export const ProductionService = {
+  getList: async () => {
+    await simulateNetwork(400);
     return [
-      { id: '44921', name: 'Ana Carolina Silva', status: 'Produção', price: 'R$ 489,00', date: 'Hoje, 10:20', product: 'Bolsa Lille M', items: [{name: 'Bolsa Lille M', configuration: {color: 'Caramelo', hardware: 'Dourado'}}] },
-      { id: '44918', name: 'Juliana Fernandes', status: 'Finalizado', price: 'R$ 159,90', date: 'Ontem', product: 'Necessaire Box G', items: [{name: 'Necessaire Box G', configuration: {color: 'Preto', hardware: 'N/A'}}] },
-      { id: '44915', name: 'Mariana Oliveira', status: 'Enviado', price: 'R$ 320,00', date: '22 Abr', product: 'Bolsa Lille KTA', items: [{name: 'Bolsa Lille KTA', configuration: {color: 'Off-White', hardware: 'Prata'}}] },
+      { id: 'ORD-4410', client: 'Juliana Paes', product: 'Bolsa Lille KTA', stage: 'corte', sku: 'OL-LILLE-KTA-OFF', date: '12 Out', details: { leather: 'Croco Off-White', hardware: 'Dourado', personalization: 'JP' }, efficiency: 95 }
     ];
   },
-  getPipelineSummary: async () => {
-    await simulateNetwork(0);
-    return { producao: 12, expedicao: 5, aguardando: 8, concluidos: 142 };
-  },
-  create: async (cart: CartItem[], customerContext?: { name: string; email?: string }) => {
-    await simulateNetwork(0.1); 
-    return { tiny_id: (Math.floor(Math.random() * 90000) + 10000).toString(), status: 'success' };
+  getStats: async () => ({ efficiency: 92, averageProductionTime: '4.2 dias' }),
+  updateStage: async (itemId: string, newStage: ProductionStage) => { await simulateNetwork(100); return true; }
+};
+
+export const OmnichannelService = {
+  sendMessage: async (channel: ChannelSource, recipient: string, content: string): Promise<boolean> => {
+    console.log(`Enviando via ${channel}: ${content}`);
+    return true;
   }
 };

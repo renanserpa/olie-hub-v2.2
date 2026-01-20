@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { createRoot } from 'react-dom/client';
 import RootLayout from './app/layout.tsx';
 import DashboardPage from './app/page.tsx';
@@ -10,81 +10,87 @@ import SettingsPage from './app/settings/page.tsx';
 import ProductionPage from './app/production/page.tsx';
 
 /**
- * OlieHub V2 - Main Application Entry & Hash Router
- * Gerencia a navegação entre os módulos principais sem recarregar a página.
+ * OlieHub Core Routing - Normalização de Hash robusta
+ * Garante paridade entre as rotas configuradas e a URL do navegador.
  */
-const App = () => {
-  // Normaliza o hash para garantir que sempre comece com '/' e seja consistente
-  const getNormalizedPath = useCallback(() => {
-    if (typeof window === 'undefined') return '/';
-    // Remove o '#' inicial
-    let hash = window.location.hash.replace(/^#/, '');
-    // Se estiver vazio, assume a raiz
-    if (!hash) return '/';
-    // Garante que o caminho comece com '/' para bater com as condições de renderPage
-    return hash.startsWith('/') ? hash : '/' + hash;
-  }, []);
+const normalizePath = (hash: string): string => {
+  const clean = hash.replace(/^#/, '').split('?')[0];
+  if (!clean || clean === '' || clean === '/') return '/';
+  return clean.startsWith('/') ? clean : `/${clean}`;
+};
 
-  const [currentPath, setCurrentPath] = useState(getNormalizedPath());
+const App = () => {
+  const [currentPath, setCurrentPath] = useState(() => normalizePath(window.location.hash));
   const [isNavigating, setIsNavigating] = useState(false);
 
+  // Listener para mudanças na navegação
   useEffect(() => {
     const handleHashChange = () => {
-      const newPath = getNormalizedPath();
+      const nextPath = normalizePath(window.location.hash);
       
-      // Se o caminho não mudou (ex: cliques repetidos), ignorar
-      if (newPath === currentPath) return;
+      if (nextPath === currentPath) return;
 
-      // Inicia animação de transição (saída)
       setIsNavigating(true);
       
-      // Delay estratégico para sincronizar com a animação de CSS (globals.css)
+      // Delay de 200ms para permitir a transição de saída do CSS
       const timer = setTimeout(() => {
-        setCurrentPath(newPath);
+        setCurrentPath(nextPath);
         setIsNavigating(false);
-        
-        // Garante que o scroll volte ao topo na mudança de página para UX consistente
-        window.scrollTo({ top: 0, behavior: 'instant' });
-      }, 150);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }, 200);
 
       return () => clearTimeout(timer);
     };
 
-    // Registrar listener para mudanças de hash (navegação nativa do browser)
     window.addEventListener('hashchange', handleHashChange);
-    
-    // Força um hash inicial se o usuário entrar na URL limpa (ex: oliehub.com)
-    if (!window.location.hash || window.location.hash === '#') {
-      window.location.hash = '/';
+    return () => window.removeEventListener('hashchange', handleHashChange);
+  }, [currentPath]);
+
+  // Redirecionamentos de segurança e estado inicial
+  useEffect(() => {
+    const isConfigured = !!localStorage.getItem('olie_supabase_url');
+    const path = normalizePath(window.location.hash);
+
+    // Se não houver configuração, força a ida para Settings
+    if (!isConfigured && path !== '/settings') {
+      window.location.hash = '/settings';
+      return;
     }
 
-    return () => window.removeEventListener('hashchange', handleHashChange);
-  }, [currentPath, getNormalizedPath]);
+    // Normaliza a rota raiz caso esteja vazio
+    if (window.location.hash === '' || window.location.hash === '#') {
+      window.location.hash = '/';
+    }
+  }, []);
 
-  /**
-   * Mapeamento de rotas para componentes
-   * Utiliza 'startsWith' para permitir futura expansão de rotas aninhadas ou parâmetros
-   */
-  const renderPage = () => {
-    if (currentPath.startsWith('/inbox')) return <InboxPage />;
-    if (currentPath.startsWith('/pedidos')) return <PedidosPage />;
-    if (currentPath.startsWith('/production')) return <ProductionPage />;
-    if (currentPath.startsWith('/clientes')) return <ClientesPage />;
-    if (currentPath.startsWith('/settings')) return <SettingsPage />;
+  // Dispatcher de Componentes por Rota
+  const PageContent = useMemo(() => {
+    const path = currentPath;
     
-    // Dashboard como fallback / home (Concierge)
+    if (path === '/settings') return <SettingsPage />;
+    if (path === '/inbox' || path.startsWith('/inbox/')) return <InboxPage />;
+    if (path === '/pedidos' || path.startsWith('/pedidos/')) return <PedidosPage />;
+    if (path === '/production' || path.startsWith('/production/')) return <ProductionPage />;
+    if (path === '/clientes' || path.startsWith('/clientes/')) return <ClientesPage />;
+    if (path === '/') return <DashboardPage />;
+    
+    // Fallback editorial para o dashboard
     return <DashboardPage />;
-  };
+  }, [currentPath]);
 
   return (
     <RootLayout>
       <div 
         className={`
-          transition-all duration-300 flex-1 flex flex-col h-full w-full min-h-0
-          ${isNavigating ? 'opacity-0 translate-y-2' : 'opacity-100 translate-y-0'}
+          flex-1 flex flex-col h-full w-full min-h-0 overflow-hidden
+          transition-all duration-300 ease-in-out
+          ${isNavigating 
+            ? 'opacity-0 translate-y-4 scale-[0.99] pointer-events-none' 
+            : 'opacity-100 translate-y-0 scale-100'
+          }
         `}
       >
-        {renderPage()}
+        {PageContent}
       </div>
     </RootLayout>
   );
@@ -93,5 +99,9 @@ const App = () => {
 const container = document.getElementById('root');
 if (container) {
   const root = createRoot(container);
-  root.render(<App />);
+  root.render(
+    <React.StrictMode>
+      <App />
+    </React.StrictMode>
+  );
 }

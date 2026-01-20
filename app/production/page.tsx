@@ -30,7 +30,9 @@ import {
   TrendingUp,
   Activity,
   History,
-  Timer
+  Timer,
+  AlertTriangle,
+  Flame
 } from 'lucide-react';
 
 // --- Reducer Types & Logic ---
@@ -286,7 +288,7 @@ export default function ProductionPage() {
                 return (
                   <div 
                     key={stage} 
-                    className={`w-[320px] flex flex-col h-full rounded-[2.5rem] transition-all duration-500 ${
+                    className={`w-[340px] flex flex-col h-full rounded-[2.5rem] transition-all duration-500 ${
                       isHovered ? 'bg-stone-100/40 scale-[1.01]' : ''
                     }`}
                     onDragOver={(e) => handleDragOver(e, stage)}
@@ -316,43 +318,68 @@ export default function ProductionPage() {
                           onDragEnd={() => dispatch({ type: 'DRAG_END' })}
                           onClick={() => setSelectedItem(item)}
                           className={`
-                            group bg-white p-6 rounded-[2.2rem] border border-stone-100/60 shadow-sm 
-                            hover:shadow-olie-lg hover:border-olie-500/20 hover:-translate-y-1
-                            transition-all duration-500 cursor-pointer relative overflow-hidden
-                            ${item.delayed ? 'ring-2 ring-rose-500/10' : ''}
+                            group p-6 rounded-[2.2rem] border transition-all duration-500 cursor-pointer relative overflow-hidden
+                            ${item.rush 
+                              ? 'bg-rose-50/30 border-rose-200 shadow-[0_4px_20px_-2px_rgba(244,63,94,0.1)]' 
+                              : item.delayed 
+                                ? 'bg-orange-50/30 border-orange-200 shadow-[0_4px_20px_-2px_rgba(249,115,22,0.1)]' 
+                                : 'bg-white border-stone-100/60 shadow-sm hover:border-olie-500/20 hover:shadow-olie-lg'}
+                            hover:-translate-y-1
                             ${state.draggedItemId === item.id ? 'opacity-20 scale-95' : 'opacity-100'}
                           `}
                         >
-                          {item.rush && <div className="absolute top-4 right-4 h-2 w-2 rounded-full bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)] animate-pulse" />}
-                          
+                          {/* Top Indicators */}
                           <div className="flex justify-between items-start mb-3">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-stone-300">{item.id}</span>
-                            {item.delayed && <AlertCircle size={14} className="text-rose-400" />}
+                            <span className={`text-[9px] font-black uppercase tracking-widest ${item.rush ? 'text-rose-400' : item.delayed ? 'text-orange-400' : 'text-stone-300'}`}>
+                              {item.id}
+                            </span>
+                            <div className="flex gap-1.5">
+                              {item.rush && (
+                                <div className="px-2 py-0.5 bg-rose-500 text-white text-[8px] font-black uppercase rounded-lg shadow-[0_0_12px_rgba(244,63,94,0.4)] flex items-center gap-1 animate-pulse">
+                                  <Flame size={8} fill="currentColor" /> Urgente
+                                </div>
+                              )}
+                              {item.delayed && (
+                                <div className="px-2 py-0.5 bg-orange-500 text-white text-[8px] font-black uppercase rounded-lg shadow-[0_0_12px_rgba(249,115,22,0.4)] flex items-center gap-1">
+                                  <AlertTriangle size={8} /> Atrasado
+                                </div>
+                              )}
+                            </div>
                           </div>
 
-                          <h4 className="font-serif italic text-lg text-olie-900 leading-tight mb-4 group-hover:text-olie-500 transition-colors">
+                          <h4 className={`font-serif italic text-lg leading-tight mb-4 group-hover:text-olie-500 transition-colors ${item.rush || item.delayed ? 'text-olie-900 font-bold' : 'text-olie-900'}`}>
                             {item.product}
                           </h4>
 
                           <div className="flex items-center justify-between">
                              <div className="flex items-center gap-2">
-                                <div className="w-8 h-8 rounded-xl bg-stone-50 border border-stone-100 flex items-center justify-center text-[10px] font-serif italic text-stone-400">
+                                <div className={`w-8 h-8 rounded-xl border flex items-center justify-center text-[10px] font-serif italic transition-colors ${
+                                  item.rush ? 'bg-rose-100 border-rose-200 text-rose-500' : 
+                                  item.delayed ? 'bg-orange-100 border-orange-200 text-orange-500' : 
+                                  'bg-stone-50 border-stone-100 text-stone-400'
+                                }`}>
                                    {item.client.charAt(0)}
                                 </div>
                                 <p className="text-[10px] font-bold text-stone-700 truncate max-w-[120px]">{item.client}</p>
                              </div>
-                             <div className="flex gap-1.5">
-                                <Palette size={12} className="text-stone-300" />
-                                <Hammer size={12} className="text-stone-300" />
+                             <div className="flex gap-1.5 opacity-40">
+                                <Palette size={12} className="text-stone-800" />
+                                <Hammer size={12} className="text-stone-800" />
                              </div>
                           </div>
                           
-                          <div className="mt-4 pt-4 border-t border-stone-50 flex items-center justify-between">
-                             <span className="text-[9px] font-black uppercase text-stone-300 flex items-center gap-1.5">
+                          <div className={`mt-4 pt-4 border-t flex items-center justify-between ${
+                            item.rush ? 'border-rose-100' : item.delayed ? 'border-orange-100' : 'border-stone-50'
+                          }`}>
+                             <span className={`text-[9px] font-black uppercase flex items-center gap-1.5 ${
+                               item.rush ? 'text-rose-500' : item.delayed ? 'text-orange-500' : 'text-stone-300'
+                             }`}>
                                 <Clock size={12} /> {item.date}
                              </span>
                              <div className="w-10 h-1 bg-stone-50 rounded-full overflow-hidden">
-                                <div className="h-full bg-olie-500" style={{ width: `${(stages.indexOf(item.stage) + 1) * 20}%` }} />
+                                <div className={`h-full ${
+                                  item.rush ? 'bg-rose-500' : item.delayed ? 'bg-orange-500' : 'bg-olie-500'
+                                }`} style={{ width: `${(stages.indexOf(item.stage) + 1) * 20}%` }} />
                              </div>
                           </div>
                         </div>
@@ -384,8 +411,9 @@ export default function ProductionPage() {
                   {filteredItems.map(item => (
                     <tr key={item.id} className="group hover:bg-stone-50/50 transition-colors cursor-pointer" onClick={() => setSelectedItem(item)}>
                       <td className="px-10 py-8">
-                        <span className="text-sm font-serif italic text-olie-700 font-bold">#{item.id}</span>
-                        {item.rush && <span className="ml-3 px-2 py-0.5 bg-rose-50 text-rose-500 text-[8px] font-black uppercase rounded-md border border-rose-100">Rush</span>}
+                        <span className={`text-sm font-serif italic font-bold ${item.rush ? 'text-rose-600' : item.delayed ? 'text-orange-600' : 'text-olie-700'}`}>#{item.id}</span>
+                        {item.rush && <span className="ml-3 px-2 py-0.5 bg-rose-500 text-white text-[8px] font-black uppercase rounded-md">Urgente</span>}
+                        {item.delayed && <span className="ml-3 px-2 py-0.5 bg-orange-500 text-white text-[8px] font-black uppercase rounded-md">Atrasado</span>}
                       </td>
                       <td className="px-10 py-8">
                         <p className="font-bold text-stone-800 text-sm">{item.product}</p>
@@ -393,7 +421,7 @@ export default function ProductionPage() {
                       </td>
                       <td className="px-10 py-8">
                         <div className="flex items-center gap-3">
-                           <div className="w-2 h-2 rounded-full bg-olie-500" />
+                           <div className={`w-2 h-2 rounded-full ${item.rush ? 'bg-rose-500' : item.delayed ? 'bg-orange-500' : 'bg-olie-500'}`} />
                            <span className="text-[10px] font-black uppercase text-stone-600 tracking-widest">{PRODUCTION_STAGES_CONFIG[item.stage].label}</span>
                         </div>
                       </td>
@@ -401,11 +429,13 @@ export default function ProductionPage() {
                         <div className="flex flex-col gap-2">
                           <span className="text-[10px] font-black text-stone-500">{item.efficiency}%</span>
                           <div className="w-24 h-1 bg-stone-100 rounded-full overflow-hidden">
-                             <div className={`h-full ${item.efficiency && item.efficiency < 85 ? 'bg-orange-400' : 'bg-emerald-400'}`} style={{ width: `${item.efficiency}%` }} />
+                             <div className={`h-full ${item.rush ? 'bg-rose-500' : item.delayed ? 'bg-orange-500' : item.efficiency && item.efficiency < 85 ? 'bg-orange-400' : 'bg-emerald-400'}`} style={{ width: `${item.efficiency}%` }} />
                           </div>
                         </div>
                       </td>
-                      <td className="px-10 py-8 text-[10px] font-bold text-stone-400 uppercase tracking-widest">{item.date}</td>
+                      <td className={`px-10 py-8 text-[10px] font-bold uppercase tracking-widest ${item.rush ? 'text-rose-500' : item.delayed ? 'text-orange-500' : 'text-stone-400'}`}>
+                        {item.date}
+                      </td>
                       <td className="px-10 py-8 text-right">
                          <button className="p-3 text-stone-200 group-hover:text-olie-500 transition-all transform group-hover:translate-x-1">
                             <ChevronRight size={18} />
@@ -457,15 +487,22 @@ export default function ProductionPage() {
 
             <div className="flex-1 overflow-y-auto p-10 space-y-12 scrollbar-hide pb-32">
               <div className="flex gap-8 items-start">
-                 <div className="w-32 h-32 bg-stone-50 rounded-[2.5rem] border border-stone-100 flex items-center justify-center text-stone-200 shadow-inner">
+                 <div className="w-32 h-32 bg-stone-50 rounded-[2.5rem] border border-stone-100 flex items-center justify-center text-stone-200 shadow-inner overflow-hidden">
+                    {/* Visual context for urgent/delayed in detail */}
+                    {selectedItem.rush && <div className="absolute top-0 left-0 w-full h-1.5 bg-rose-500 animate-pulse" />}
+                    {selectedItem.delayed && <div className="absolute top-0 left-0 w-full h-1.5 bg-orange-500" />}
                     <ImageIcon size={48} strokeWidth={1} />
                  </div>
                  <div className="flex-1 space-y-2">
                     <h3 className="text-2xl font-serif italic text-olie-900 leading-tight">{selectedItem.product}</h3>
                     <p className="text-[10px] font-bold text-stone-400 uppercase tracking-widest italic">{selectedItem.sku}</p>
-                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-olie-50 rounded-full border border-olie-100">
-                       <div className="w-1.5 h-1.5 rounded-full bg-olie-500" />
-                       <span className="text-[9px] font-black uppercase text-olie-700">{PRODUCTION_STAGES_CONFIG[selectedItem.stage].label}</span>
+                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${
+                      selectedItem.rush ? 'bg-rose-50 border-rose-100 text-rose-700' :
+                      selectedItem.delayed ? 'bg-orange-50 border-orange-100 text-orange-700' :
+                      'bg-olie-50 border-olie-100 text-olie-700'
+                    }`}>
+                       <div className={`w-1.5 h-1.5 rounded-full ${selectedItem.rush ? 'bg-rose-500' : selectedItem.delayed ? 'bg-orange-500' : 'bg-olie-500'}`} />
+                       <span className="text-[9px] font-black uppercase">{PRODUCTION_STAGES_CONFIG[selectedItem.stage].label}</span>
                     </div>
                  </div>
               </div>

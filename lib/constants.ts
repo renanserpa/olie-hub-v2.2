@@ -1,4 +1,3 @@
-
 import { 
   MessageCircle, 
   Instagram, 
@@ -123,6 +122,7 @@ export const PRODUCTION_STAGES_CONFIG: Record<ProductionStage, { label: string; 
 /**
  * MOCK_PRODUCTS
  * The initial catalog of customizable Olie items.
+ * Extended to 15 items to test pagination (10 per page).
  */
 export const MOCK_PRODUCTS: Product[] = [
   {
@@ -207,6 +207,96 @@ export const MOCK_PRODUCTS: Product[] = [
       hardware: ['Dourado'],
       personalization: { allowed: true, max_chars: 15, type: 'text' }
     }
+  },
+  {
+    id: 'p6',
+    sku_base: 'OL-TOTE-CITY',
+    name: 'Tote City Leather',
+    category_id: 'bolsas',
+    base_price: 620.00,
+    image_url: 'https://images.unsplash.com/photo-1590874103328-eac38a683ce7?w=500&q=80',
+    options: { colors: [{ label: 'Cognac', hex: '#965A38' }], hardware: ['Dourado'], personalization: { allowed: true, max_chars: 3, type: 'monogram' } }
+  },
+  {
+    id: 'p7',
+    sku_base: 'OL-CLUTCH-EV',
+    name: 'Clutch Envelope',
+    category_id: 'bolsas',
+    base_price: 245.00,
+    image_url: 'https://images.unsplash.com/photo-1566150905458-1bf1fd113f06?w=500&q=80',
+    options: { colors: [{ label: 'Ouro Rosa', hex: '#B76E79' }], hardware: ['Ouro Rosa'], personalization: { allowed: true, max_chars: 5, type: 'text' } }
+  },
+  {
+    id: 'p8',
+    sku_base: 'OL-WALLET-SLIM',
+    name: 'Carteira Slim Card',
+    category_id: 'acessorios',
+    base_price: 110.00,
+    image_url: 'https://images.unsplash.com/photo-1627123424574-724758594e93?w=500&q=80',
+    options: { colors: [{ label: 'Preto', hex: '#000' }], hardware: ['Nenhum'], personalization: { allowed: true, max_chars: 2, type: 'monogram' } }
+  },
+  {
+    id: 'p9',
+    sku_base: 'OL-BACK-HERIT',
+    name: 'Mochila Heritage',
+    category_id: 'bolsas',
+    base_price: 890.00,
+    image_url: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=500&q=80',
+    options: { colors: [{ label: 'Oliva', hex: '#708238' }], hardware: ['Grafite'], personalization: { allowed: true, max_chars: 3, type: 'monogram' } }
+  },
+  {
+    id: 'p10',
+    sku_base: 'OL-BRIEF-EXEC',
+    name: 'Pasta Executiva Pro',
+    category_id: 'bolsas',
+    base_price: 1250.00,
+    image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&q=80',
+    options: { colors: [{ label: 'Marrom Café', hex: '#3B2F2F' }], hardware: ['Prateado'], personalization: { allowed: true, max_chars: 4, type: 'monogram' } }
+  },
+  {
+    id: 'p11',
+    sku_base: 'OL-LILLE-MINI',
+    name: 'Bolsa Lille Mini',
+    category_id: 'bolsas',
+    base_price: 380.00,
+    image_url: 'https://images.unsplash.com/photo-1591561954557-26941169b49e?w=500&q=80',
+    options: { colors: [{ label: 'Lavanda', hex: '#E6E6FA' }], hardware: ['Dourado'], personalization: { allowed: true, max_chars: 2, type: 'monogram' } }
+  },
+  {
+    id: 'p12',
+    sku_base: 'OL-CASE-LAP',
+    name: 'Case Laptop 14"',
+    category_id: 'acessorios',
+    base_price: 195.00,
+    image_url: 'https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=500&q=80',
+    options: { colors: [{ label: 'Cinza', hex: '#808080' }], hardware: ['Zíper YKK'], personalization: { allowed: true, max_chars: 10, type: 'text' } }
+  },
+  {
+    id: 'p13',
+    sku_base: 'OL-STRAP-LUX',
+    name: 'Alça de Ombro Lux',
+    category_id: 'acessorios',
+    base_price: 145.00,
+    image_url: 'https://images.unsplash.com/photo-1614179664532-6a8497e163b4?w=500&q=80',
+    options: { colors: [{ label: 'Multicolor', hex: '#FFF' }], hardware: ['Dourado'], personalization: { allowed: false, max_chars: 0, type: 'text' } }
+  },
+  {
+    id: 'p14',
+    sku_base: 'OL-BELT-CLASS',
+    name: 'Cinto Classic Leather',
+    category_id: 'acessorios',
+    base_price: 178.00,
+    image_url: 'https://images.unsplash.com/photo-1553062407-98eeb64c6a62?w=500&q=80',
+    options: { colors: [{ label: 'Preto', hex: '#000' }], hardware: ['Prateado'], personalization: { allowed: true, max_chars: 3, type: 'monogram' } }
+  },
+  {
+    id: 'p15',
+    sku_base: 'OL-KEY-HOLDER',
+    name: 'Porta Chaves Organizado',
+    category_id: 'acessorios',
+    base_price: 65.00,
+    image_url: 'https://images.unsplash.com/photo-1582142839970-2b9e04b60f25?w=500&q=80',
+    options: { colors: [{ label: 'Caramelo', hex: '#C68E5F' }], hardware: ['Dourado'], personalization: { allowed: true, max_chars: 1, type: 'monogram' } }
   }
 ];
 
@@ -226,7 +316,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       channel_source: 'instagram',
       total_orders: 0,
       ltv: 0,
-      tags: ['Dúvida Produto', 'Lead Frio']
+      tags: ['Dúvida Produto', 'Lead Frio'],
+      // Added missing created_at to satisfy Customer type
+      created_at: new Date().toISOString()
     },
     status: 'assigned',
     sales_stage: 'cobrar',
@@ -246,7 +338,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       channel_source: 'whatsapp',
       total_orders: 2,
       ltv: 940.00,
-      tags: ['Cliente VIP', 'Lille Lover']
+      tags: ['Cliente VIP', 'Lille Lover'],
+      // Added missing created_at to satisfy Customer type
+      created_at: new Date().toISOString()
     },
     status: 'assigned',
     sales_stage: 'producao',
@@ -266,7 +360,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       channel_source: 'pinterest',
       total_orders: 0,
       ltv: 0,
-      tags: ['Inspiration', 'Lead Quente']
+      tags: ['Inspiration', 'Lead Quente'],
+      // Added missing created_at to satisfy Customer type
+      created_at: new Date().toISOString()
     },
     status: 'queue',
     sales_stage: 'cobrar',
@@ -286,7 +382,9 @@ export const MOCK_CONVERSATIONS: Conversation[] = [
       channel_source: 'facebook',
       total_orders: 1,
       ltv: 2500.00,
-      tags: ['Atacado', 'B2B']
+      tags: ['Atacado', 'B2B'],
+      // Added missing created_at to satisfy Customer type
+      created_at: new Date().toISOString()
     },
     status: 'bot',
     sales_stage: 'cobrar',

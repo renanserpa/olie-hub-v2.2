@@ -11,13 +11,14 @@ export default function ClientesPage() {
   const [activeSegment, setActiveSegment] = useState<'Todos' | 'VIP' | 'Leads'>('Todos');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // Added created_at to all mock customers to fix property missing error
   const clients: Customer[] = [
-    { id: '1', full_name: 'Ana Carolina Silva', email: 'ana.carol@email.com', phone: '(11) 98888-7777', ltv: 2400, total_orders: 4, tags: ['VIP', 'Lille Lover'], channel_source: 'whatsapp' },
-    { id: '2', full_name: 'Bia Mendonça', email: 'bia.m@email.com', phone: '(21) 97777-6666', ltv: 890, total_orders: 1, tags: ['Lead Quente'], channel_source: 'instagram' },
-    { id: '3', full_name: 'Juliana Paes', email: 'jupaes@email.com', phone: '(11) 96666-5555', ltv: 5200, total_orders: 12, tags: ['VIP Gold', 'Recorrente'], channel_source: 'whatsapp' },
-    { id: '4', full_name: 'Mariana Oliveira', email: 'mari.o@email.com', phone: '(31) 95555-4444', ltv: 1420, total_orders: 2, tags: ['Minimalista'], channel_source: 'pinterest' },
-    { id: '5', full_name: 'Camila Queiroz', email: 'camila.q@email.com', phone: '(11) 94444-3333', ltv: 3100, total_orders: 5, tags: ['VIP', 'Fidélidade'], channel_source: 'instagram' },
-    { id: '6', full_name: 'Bruna Marquezine', email: 'bruna.m@email.com', phone: '(21) 93333-2222', ltv: 8500, total_orders: 18, tags: ['Collector', 'VIP Platinum'], channel_source: 'whatsapp' },
+    { id: '1', full_name: 'Ana Carolina Silva', email: 'ana.carol@email.com', phone: '(11) 98888-7777', ltv: 2400, total_orders: 4, tags: ['VIP', 'Lille Lover'], channel_source: 'whatsapp', created_at: '2023-01-15T10:00:00Z' },
+    { id: '2', full_name: 'Bia Mendonça', email: 'bia.m@email.com', phone: '(21) 97777-6666', ltv: 890, total_orders: 1, tags: ['Lead Quente'], channel_source: 'instagram', created_at: '2023-05-20T14:30:00Z' },
+    { id: '3', full_name: 'Juliana Paes', email: 'jupaes@email.com', phone: '(11) 96666-5555', ltv: 5200, total_orders: 12, tags: ['VIP Gold', 'Recorrente'], channel_source: 'whatsapp', created_at: '2022-11-02T09:15:00Z' },
+    { id: '4', full_name: 'Mariana Oliveira', email: 'mari.o@email.com', phone: '(31) 95555-4444', ltv: 1420, total_orders: 2, tags: ['Minimalista'], channel_source: 'pinterest', created_at: '2023-03-10T11:45:00Z' },
+    { id: '5', full_name: 'Camila Queiroz', email: 'camila.q@email.com', phone: '(11) 94444-3333', ltv: 3100, total_orders: 5, tags: ['VIP', 'Fidélidade'], channel_source: 'instagram', created_at: '2023-02-28T16:20:00Z' },
+    { id: '6', full_name: 'Bruna Marquezine', email: 'bruna.m@email.com', phone: '(21) 93333-2222', ltv: 8500, total_orders: 18, tags: ['Collector', 'VIP Platinum'], channel_source: 'whatsapp', created_at: '2022-08-14T13:10:00Z' },
   ];
 
   const filteredClients = useMemo(() => {

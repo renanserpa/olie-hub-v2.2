@@ -1,13 +1,14 @@
 
 "use client";
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, Package, Truck, Calendar, CreditCard, 
   MapPin, ExternalLink, ChevronRight, CheckCircle2,
-  Clock, Scissors, Palette, History, Diamond
+  Clock, Scissors, Palette, History, Diamond, Loader2
 } from 'lucide-react';
 import { Order } from '../../types/index.ts';
+import { OrderService } from '../../services/api.ts';
 
 interface OrderDetailDrawerProps {
   order: Order | null;
@@ -15,7 +16,33 @@ interface OrderDetailDrawerProps {
   onClose: () => void;
 }
 
-export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isOpen, onClose }) => {
+export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order: initialOrder, isOpen, onClose }) => {
+  const [order, setOrder] = useState<Order | null>(initialOrder);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setOrder(initialOrder);
+  }, [initialOrder]);
+
+  useEffect(() => {
+    const fetchDetails = async () => {
+      if (isOpen && order && (order as any).source === 'tiny' && (!order.items || order.items.length === 0)) {
+        setIsLoading(true);
+        try {
+          const fullOrder = await OrderService.getById((order as any).tiny_id || order.id);
+          if (fullOrder) {
+            setOrder(fullOrder);
+          }
+        } catch (err) {
+          console.error("Failed to hydrate Tiny order details:", err);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    };
+    fetchDetails();
+  }, [isOpen, order?.id]);
+
   if (!order) return null;
 
   const timeline = order.timeline || [
@@ -49,6 +76,13 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
 
           <div className="flex-1 overflow-y-auto p-10 space-y-12 scrollbar-hide pb-32">
             
+            {isLoading && (
+              <div className="flex items-center justify-center gap-3 py-10 bg-stone-50 rounded-[2.5rem]">
+                <Loader2 size={20} className="animate-spin text-olie-500" />
+                <span className="text-sm font-serif italic text-stone-500">Sincronizando detalhes do ERP...</span>
+              </div>
+            )}
+
             {/* Actionable Status */}
             <section className="bg-stone-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden group">
                <div className="absolute inset-0 bg-gradient-to-br from-olie-500/20 to-transparent" />
@@ -79,7 +113,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
                   <h4 className="font-serif italic font-bold text-lg text-stone-800 leading-none mb-2">{order.name}</h4>
                   <p className="text-xs text-stone-400 font-medium">{order.customer_email || 'contato@cliente.com.br'}</p>
                   <div className="flex gap-2 mt-3">
-                     <span className="px-2 py-0.5 bg-stone-100 text-[8px] font-black uppercase text-stone-400 rounded">Lead Recorrente</span>
+                     <span className="px-2 py-0.5 bg-stone-100 text-[8px] font-black uppercase text-stone-400 rounded">{(order as any).source === 'tiny' ? 'Integração Tiny' : 'Mock Data'}</span>
                   </div>
                 </div>
                 <ChevronRight size={18} className="text-stone-200 group-hover:text-olie-500 transition-colors" />
@@ -89,7 +123,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
             {/* Detailed Items / The DNA */}
             <section className="space-y-6">
               <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-stone-300 border-b border-stone-100 pb-3">DNA do Produto</h3>
-              {order.items.map((item, idx) => (
+              {order.items && order.items.length > 0 ? order.items.map((item, idx) => (
                 <div key={idx} className="bg-white border border-stone-100 rounded-[3rem] p-8 shadow-sm space-y-8 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-stone-50/50 rounded-full -translate-y-1/2 translate-x-1/2 group-hover:bg-olie-50/50 transition-colors" />
                   
@@ -99,7 +133,7 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
                     </div>
                     <div className="flex flex-col justify-center">
                       <h4 className="font-serif italic text-xl text-stone-900 leading-tight mb-2">{item.name}</h4>
-                      <p className="text-[10px] font-black text-stone-300 uppercase tracking-widest italic">Base SKU: {order.product}</p>
+                      <p className="text-[10px] font-black text-stone-300 uppercase tracking-widest italic">SKU: {order.product}</p>
                     </div>
                   </div>
 
@@ -109,18 +143,18 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
                         <Palette size={12} />
                         <span className="text-[9px] font-black uppercase tracking-widest">Couro Principal</span>
                       </div>
-                      <p className="text-xs font-bold text-stone-800">{item.configuration.color}</p>
+                      <p className="text-xs font-bold text-stone-800">{item.configuration?.color || 'Padrão'}</p>
                     </div>
                     <div className="p-5 bg-stone-50 rounded-[2rem] border border-stone-100/50">
                       <div className="flex items-center gap-2 mb-2 text-stone-400">
                         <Scissors size={12} />
-                        <span className="text-[9px] font-black uppercase tracking-widest">Metais (Acabamento)</span>
+                        <span className="text-[9px] font-black uppercase tracking-widest">Metais</span>
                       </div>
-                      <p className="text-xs font-bold text-stone-800">{item.configuration.hardware}</p>
+                      <p className="text-xs font-bold text-stone-800">{item.configuration?.hardware || 'Dourado'}</p>
                     </div>
                   </div>
 
-                  {item.configuration.personalization_text && (
+                  {item.configuration?.personalization_text && (
                     <div className="p-6 bg-olie-900 text-white rounded-[2rem] flex justify-between items-center shadow-xl shadow-stone-200">
                       <div className="flex items-center gap-3">
                         <CheckCircle2 size={14} className="text-olie-300" />
@@ -130,7 +164,9 @@ export const OrderDetailDrawer: React.FC<OrderDetailDrawerProps> = ({ order, isO
                     </div>
                   )}
                 </div>
-              ))}
+              )) : !isLoading && (
+                <div className="text-center py-10 opacity-30 italic text-sm">Itens não carregados.</div>
+              )}
             </section>
 
             {/* Traceability / Log */}

@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -6,7 +5,7 @@ import {
   X, User, ShoppingBag, Package, ClipboardCopy, 
   Truck, ChevronRight, Star, Eye, Send, Sparkles, 
   BrainCircuit, MessageSquareQuote, Loader2, ThumbsUp, 
-  ThumbsDown, Palette, Image as ImageIcon
+  ThumbsDown, Palette, Image as ImageIcon, ChevronLeft
 } from 'lucide-react';
 import { Product, Order, Message } from '../../types/index.ts';
 import { AIService } from '../../services/api.ts';
@@ -30,12 +29,17 @@ const MATERIAL_CHIPS = [
   { label: 'Prata Nobre', prompt: 'Brushed silver hardware' },
 ];
 
+const ITEMS_PER_PAGE = 10;
+
 export const ActionPanel: React.FC<ActionPanelProps> = ({
   onClose, client, catalog, recentOrders, messages, forcedTab
 }) => {
   const [activeTab, setActiveTab] = useState<'crm' | 'orders' | 'catalog' | 'ai' | 'studio'>('crm');
   const [aiInsight, setAiInsight] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  
+  // Catalog Pagination State
+  const [catalogPage, setCatalogPage] = useState(0);
   
   // Visual Studio State
   const [studioPrompt, setStudioPrompt] = useState('');
@@ -47,6 +51,13 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
       setActiveTab(forcedTab as any);
     }
   }, [forcedTab]);
+
+  // Reset pagination when switching to catalog tab
+  useEffect(() => {
+    if (activeTab === 'catalog') {
+      setCatalogPage(0);
+    }
+  }, [activeTab]);
 
   const handleRunAI = async () => {
     if (!client || messages.length === 0) return;
@@ -88,6 +99,10 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
     'Frustrado': 'text-rose-600 bg-rose-50',
     'Indefinido': 'text-stone-300 bg-stone-50'
   };
+
+  // Pagination Logic
+  const totalPages = Math.ceil(catalog.length / ITEMS_PER_PAGE);
+  const displayedCatalog = catalog.slice(catalogPage * ITEMS_PER_PAGE, (catalogPage + 1) * ITEMS_PER_PAGE);
 
   return (
     <div className="h-full bg-white flex flex-col overflow-hidden w-full relative">
@@ -297,13 +312,21 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
           </div>
         )}
 
-        {/* CATALOG TAB */}
+        {/* CATALOG TAB - WITH PAGINATION */}
         {activeTab === 'catalog' && (
           <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300 pb-10">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400 px-2">Catálogo Express</h3>
-            <div className="grid grid-cols-1 gap-4">
-              {catalog.map(product => (
-                <div key={product.id} className="p-4 bg-white border border-stone-100 rounded-[2rem] flex gap-4 hover:border-olie-500/20 hover:shadow-olie-soft transition-all group cursor-pointer">
+            <div className="flex justify-between items-center px-2">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-stone-400">Catálogo Express</h3>
+              {totalPages > 1 && (
+                <span className="text-[8px] font-black text-stone-300 uppercase tracking-widest bg-stone-50 px-2 py-1 rounded-lg">
+                  {catalogPage + 1} / {totalPages}
+                </span>
+              )}
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 min-h-[500px]">
+              {displayedCatalog.map(product => (
+                <div key={product.id} className="p-4 bg-white border border-stone-100 rounded-[2rem] flex gap-4 hover:border-olie-500/20 hover:shadow-olie-soft transition-all group cursor-pointer animate-in fade-in zoom-in-95 duration-300">
                    <div className="w-16 h-16 rounded-2xl overflow-hidden shrink-0 border border-stone-50">
                       <img src={product.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
                    </div>
@@ -320,6 +343,26 @@ export const ActionPanel: React.FC<ActionPanelProps> = ({
                 </div>
               ))}
             </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex gap-4 pt-4 sticky bottom-0 bg-white/80 backdrop-blur-md py-4">
+                <button 
+                  disabled={catalogPage === 0}
+                  onClick={() => setCatalogPage(p => p - 1)}
+                  className="flex-1 h-12 flex items-center justify-center gap-2 bg-stone-50 border border-stone-100 rounded-2xl text-[9px] font-black uppercase tracking-widest text-stone-400 disabled:opacity-30 hover:bg-stone-100 transition-all shadow-sm"
+                >
+                  <ChevronLeft size={14} /> Anterior
+                </button>
+                <button 
+                  disabled={catalogPage >= totalPages - 1}
+                  onClick={() => setCatalogPage(p => p + 1)}
+                  className="flex-1 h-12 flex items-center justify-center gap-2 bg-stone-50 border border-stone-100 rounded-2xl text-[9px] font-black uppercase tracking-widest text-stone-400 disabled:opacity-30 hover:bg-stone-100 transition-all shadow-sm"
+                >
+                  Próximo <ChevronRight size={14} />
+                </button>
+              </div>
+            )}
           </div>
         )}
 

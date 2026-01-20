@@ -13,12 +13,12 @@ import { SmartOrderModal } from '../../components/orders/smart-order-modal.tsx';
 export default function InboxPage() {
   const [selectedId, setSelectedId] = useState<string | undefined>();
   
-  // Painéis Colapsáveis
+  // Painéis Colapsáveis - Dimensões Olie: 320px (Esquerda) e 384px (Direita)
   const [isLeftOpen, setIsLeftOpen] = useState(true);
   const [isRightOpen, setIsRightOpen] = useState(false);
   const [rightPanelTab, setRightPanelTab] = useState<'crm' | 'orders' | 'catalog' | 'ai' | 'studio' | null>(null);
 
-  // Modais e Dados de Apoio
+  // Modais e Estados de Apoio
   const [isOrderModalOpen, setIsOrderModalOpen] = useState(false);
   const [recentOrders, setRecentOrders] = useState<any[]>([]);
 
@@ -37,25 +37,34 @@ export default function InboxPage() {
     (conversations || []).find(c => c.id === selectedId), 
   [selectedId, conversations]);
 
-  // Sincronização de pedidos ao mudar cliente
+  // Sincronização de pedidos ao mudar o cliente ativo
   useEffect(() => {
     if (activeConv) {
-        OrderService.getList().then(data => setRecentOrders(data.slice(0, 3)));
+        // Fix: OrderService.getList returns an object { data, error }, not the array directly.
+        OrderService.getList().then(result => {
+          if (result.data) {
+            setRecentOrders(result.data.slice(0, 3));
+          }
+        });
     }
   }, [activeConv]);
 
-  // Responsividade Automática
+  // Gerenciamento de Responsividade Automática
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
+      // Em telas menores que XL (1280px), fecha o painel direito por padrão
       if (width < 1280) setIsRightOpen(false);
+      // Em telas menores que LG (1024px), fecha a lista lateral por padrão
       if (width < 1024) setIsLeftOpen(false);
     };
+    
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Transformação de dados para a UI
   const uiConversations = useMemo(() => (conversations || []).map(c => ({
     id: c.id,
     name: c.customer?.full_name || 'Cliente Olie',
@@ -70,6 +79,7 @@ export default function InboxPage() {
 
   const handleSelectConversation = (id: string) => {
     setSelectedId(id);
+    // Em mobile, fecha a lista ao selecionar para liberar espaço para o chat
     if (window.innerWidth < 768) setIsLeftOpen(false);
   };
 
@@ -85,14 +95,15 @@ export default function InboxPage() {
   return (
     <>
       <div className="flex-1 flex h-full overflow-hidden bg-white relative">
+        {/* Painel Esquerdo: Lista de Atendimentos (w-80) */}
         <aside 
           className={`
             shrink-0 h-full bg-white z-30 relative overflow-hidden
             transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-            ${isLeftOpen ? 'w-[360px] border-r border-stone-100' : 'w-0 border-r-0'}
+            ${isLeftOpen ? 'w-80 border-r border-stone-100 shadow-xl' : 'w-0 border-r-0'}
           `}
         >
-          <div className="w-[360px] h-full">
+          <div className="w-80 h-full">
              <ConversationList 
                 conversations={uiConversations as any} 
                 selectedId={selectedId || ''} 
@@ -101,6 +112,7 @@ export default function InboxPage() {
           </div>
         </aside>
 
+        {/* Painel Central: Janela de Chat Primária */}
         <main className="flex-1 min-w-0 flex flex-col h-full bg-stone-50 relative z-10 overflow-hidden">
           <ChatWindow 
             client={selectedId && activeConv ? { 
@@ -126,14 +138,15 @@ export default function InboxPage() {
           />
         </main>
 
+        {/* Painel Direito: CRM, Ações e Inteligência (w-96) */}
         <aside 
           className={`
             shrink-0 h-full bg-white z-30 relative overflow-hidden
             transition-all duration-500 ease-[cubic-bezier(0.4,0,0.2,1)]
-            ${isRightOpen ? 'w-[400px] border-l border-stone-100' : 'w-0 border-l-0'}
+            ${isRightOpen ? 'w-96 border-l border-stone-100 shadow-2xl' : 'w-0 border-l-0'}
           `}
         >
-           <div className="w-[400px] h-full">
+           <div className="w-96 h-full">
               <ActionPanel 
                 isOpen={isRightOpen} 
                 onClose={() => setIsRightOpen(false)}
@@ -151,6 +164,14 @@ export default function InboxPage() {
               />
            </div>
         </aside>
+
+        {/* Overlay para Mobile quando painéis estão abertos */}
+        {(isLeftOpen || isRightOpen) && window.innerWidth < 1024 && (
+          <div 
+            className="absolute inset-0 bg-stone-900/10 backdrop-blur-sm z-20 animate-in fade-in duration-300" 
+            onClick={() => { setIsLeftOpen(false); setIsRightOpen(false); }}
+          />
+        )}
       </div>
 
       <SmartOrderModal 

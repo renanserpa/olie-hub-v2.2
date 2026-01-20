@@ -14,21 +14,21 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" type="text/tailwindcss" href="app/globals.css">
 
-    <!-- Tailwind JIT Configuration sync with tailwind.config.ts for CDN runtime -->
+    <!-- Tailwind JIT Configuration sync with Design System -->
     <script>
       window.tailwind = {
         config: {
           theme: {
             extend: {
               colors: {
-                background: '#FAF9F6',
                 olie: { 
+                  rose: '#C08A7D',
+                  cream: '#FAF9F6',
+                  stone: '#4A3B38',
                   50: '#FAF7F6',
                   100: '#F5EFED',
                   300: '#DCC3BC', 
                   500: '#C08A7D',
-                  600: '#A66D60',
-                  700: '#A67569',
                   900: '#4A3B38'
                 },
                 stone: { 
@@ -73,7 +73,7 @@
 }
 </script>
 </head>
-<body class="bg-background overflow-hidden h-full">
+<body class="bg-stone-50 overflow-hidden h-full">
     <div id="root" class="h-full"></div>
     <script type="module" src="index.tsx"></script>
 </body>

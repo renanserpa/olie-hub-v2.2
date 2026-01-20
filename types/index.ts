@@ -1,7 +1,7 @@
 
 /**
- * OlieHub V3 - Core Type Definitions
- * Domain: Artisanal Luxury / Make-to-Order Business
+ * OlieHub V3 Enterprise - Type Definitions
+ * Sincronizado com Supabase Database Schema
  */
 
 export type ChannelSource = 'whatsapp' | 'instagram' | 'pinterest' | 'facebook' | 'email';
@@ -18,87 +18,16 @@ export interface UserProfile {
   avatar_url?: string;
 }
 
-export interface OrderTimelineEvent {
-  status: string;
-  date: string;
-  description: string;
-  icon?: string;
-}
-
-export interface Order {
-  id: string;
-  date: string;
-  total?: number;
-  price?: string;
-  status: string;
-  name?: string;
-  product?: string;
-  customer_email?: string;
-  customer_phone?: string;
-  items: CartItem[];
-  timeline?: OrderTimelineEvent[];
-  tracking_code?: string;
-}
-
-export interface Client {
-  id: string;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  source: ChannelSource;
-  unreadCount: number;
-  tags?: string[];
-}
-
 export interface Customer {
   id: string;
   full_name: string;
-  email: string;
-  phone: string;
-  avatar_url?: string;
+  email: string | null;
+  phone: string | null;
   channel_source: ChannelSource;
-  tiny_contact_id?: string;
-  vnda_id?: string;
-  total_orders: number;
   ltv: number;
+  total_orders: number;
   tags: string[];
-}
-
-export interface ProductOptionColor {
-  label: string;
-  hex: string;
-  value: string;
-}
-
-export interface Product {
-  id: string;
-  sku_base: string;
-  name: string;
-  category_id: 'bolsas' | 'necessaires' | 'viagem' | 'acessorios' | 'petit';
-  base_price: number;
-  image_url: string;
-  options: {
-    colors: ProductOptionColor[];
-    hardware: string[];
-    personalization: {
-      allowed: boolean;
-      max_chars: number;
-      type: 'text' | 'monogram';
-    };
-  };
-}
-
-export interface CartItem {
-  product_id: string;
-  name?: string;
-  quantity: number;
-  unit_price: number;
-  configuration: {
-    color: string;
-    hardware: string;
-    personalization_text?: string;
-  };
+  created_at: string;
 }
 
 export interface Conversation {
@@ -122,4 +51,61 @@ export interface Message {
   sender_id?: string;
   read: boolean;
   created_at: string;
+}
+
+export interface Product {
+  id: string;
+  sku_base: string;
+  name: string;
+  // Added category_id to fix "Object literal may only specify known properties" errors in lib/constants.ts
+  category_id: string;
+  base_price: number;
+  image_url: string;
+  options: any; // Armazenado como JSONB
+}
+
+export interface Order {
+  id: string;
+  customer_id?: string;
+  // Added optional fields to fix errors in app/pedidos/page.tsx and order-detail-drawer.tsx
+  name?: string;
+  product?: string;
+  price?: string;
+  date?: string;
+  customer_email?: string;
+  status: string;
+  total?: number;
+  items: any[];
+  timeline?: any[];
+  created_at?: string;
+}
+
+/**
+ * Added CartItem interface to fix "Module has no exported member 'CartItem'" errors
+ */
+export interface CartItem {
+  product_id: string;
+  name: string;
+  quantity: number;
+  unit_price: number;
+  configuration: {
+    color: string;
+    hardware: string;
+    personalization_text: string;
+  };
+}
+
+/**
+ * Added Client interface to fix "Module has no exported member 'Client'" error in conversation-list.tsx
+ */
+export interface Client {
+  id: string;
+  name: string;
+  avatar: string;
+  lastMessage: string;
+  time: string;
+  source: ChannelSource;
+  unreadCount: number;
+  tags: string[];
+  status: ConvoStatus;
 }

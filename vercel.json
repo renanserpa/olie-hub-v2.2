@@ -1,0 +1,16 @@
+
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/app/api/$1/route.ts" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    }
+  ]
+}

@@ -14,6 +14,24 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" type="text/tailwindcss" href="app/globals.css">
 
+    <!-- Early Polyfill & Diagnostics -->
+    <script>
+      // Garante que o objeto process exista antes de qualquer módulo ser carregado
+      window.process = window.process || { env: {} };
+      window.process.env = window.process.env || {};
+      
+      window.addEventListener('error', function(e) {
+        console.error('OlieHub Runtime Error:', e.error || e.message);
+        const root = document.getElementById('root');
+        if (root && root.innerHTML === '') {
+           root.innerHTML = '<div style="padding: 40px; text-align: center; font-family: sans-serif;"><h2>Erro Crítico de Inicialização</h2><p>' + (e.message || 'Erro ao carregar módulos.') + '</p><button onclick="location.reload()" style="padding: 10px 20px; background: #C08A7D; color: white; border: none; border-radius: 8px; cursor: pointer;">Recarregar Sistema</button></div>';
+        }
+      });
+      window.addEventListener('unhandledrejection', function(e) {
+        console.error('OlieHub Promise Rejection:', e.reason);
+      });
+    </script>
+
     <!-- Tailwind JIT Configuration sync with Design System -->
     <script>
       window.tailwind = {
@@ -63,14 +81,14 @@
     "react-dom": "https://esm.sh/react-dom@19.0.0",
     "react-dom/": "https://esm.sh/react-dom@19.0.0/",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
-    "lucide-react": "https://esm.sh/lucide-react?external=react",
-    "sonner": "https://esm.sh/sonner?external=react,react-dom",
-    "@supabase/ssr": "https://esm.sh/@supabase/ssr@0.8.1",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.48.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.469.0?external=react",
+    "sonner": "https://esm.sh/sonner@1.7.1?external=react,react-dom",
+    "@supabase/ssr": "https://esm.sh/@supabase/ssr@0.5.2?external=@supabase/supabase-js",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
     "@google/genai": "https://esm.sh/@google/genai@0.21.0",
-    "next/": "https://esm.sh/next@^16.1.4/",
-    "tailwindcss": "https://esm.sh/tailwindcss@^4.1.18",
-    "crypto": "https://esm.sh/crypto@^1.0.1"
+    "tailwindcss": "https://esm.sh/tailwindcss@3.4.1",
+    "crypto": "https://esm.sh/crypto-js@4.2.0",
+    "next/": "https://esm.sh/next@^16.1.4/"
   }
 }
 </script>

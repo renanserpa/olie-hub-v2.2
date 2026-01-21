@@ -24,20 +24,19 @@ export default function SupabaseProvider({ children }: { children?: React.ReactN
     mounted.current = true;
 
     const initializeAuth = async () => {
-      // Timeout de segurança para evitar loop infinito de loading
+      // Se a instância for nula (sem credenciais), liberamos o loading imediatamente
+      if (!supabaseInstance) {
+        console.log("[SupabaseProvider] Instância nula detectada. Liberando loading para modo offline.");
+        if (mounted.current) setIsLoading(false);
+        return;
+      }
+
       const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout de conexão Supabase')), 5000)
+        setTimeout(() => reject(new Error('Timeout de conexão Supabase')), 4000)
       );
 
       try {
-        if (!supabaseInstance) {
-          setIsLoading(false);
-          return;
-        }
-
         const sessionPromise = supabaseInstance.auth.getSession();
-        
-        // Corrida entre o carregamento da sessão e o timeout
         const { data } = (await Promise.race([sessionPromise, timeoutPromise])) as any;
         const session = data?.session;
         
@@ -54,7 +53,7 @@ export default function SupabaseProvider({ children }: { children?: React.ReactN
           }
         }
       } catch (err) {
-        console.warn("OlieHub: Operando em modo offline ou restrito. Detalhes:", err);
+        console.warn("OlieHub Auth: Conexão restrita ou offline.", err);
       } finally {
         if (mounted.current) {
           setIsLoading(false);
@@ -106,6 +105,6 @@ export default function SupabaseProvider({ children }: { children?: React.ReactN
 
 export const useSupabase = () => {
   const context = useContext(Context);
-  if (context === undefined) throw new Error('useSupabase must be used inside SupabaseProvider');
+  if (context === undefined) return { supabase: null, user: null, profile: null, isLoading: false };
   return context;
 }

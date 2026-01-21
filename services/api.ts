@@ -33,7 +33,7 @@ const fetchWithTimeout = async (url: string, options: any, timeout = 10000) => {
 
 export const SyncService = {
   getLogs: () => {
-    const logs = localStorage.getItem('olie_sync_logs');
+    const logs = typeof window !== 'undefined' ? localStorage.getItem('olie_sync_logs') : null;
     return logs ? JSON.parse(logs) : [];
   },
 
@@ -82,7 +82,7 @@ export const SyncService = {
   },
 
   getStatusMappings: () => {
-    const mappings = localStorage.getItem('olie_status_mappings');
+    const mappings = typeof window !== 'undefined' ? localStorage.getItem('olie_status_mappings') : null;
     return mappings ? JSON.parse(mappings) : {
       'aberto': 'corte',
       'aguardando': 'corte',
@@ -202,46 +202,13 @@ export const OrderService = {
   }
 };
 
-export const IntegrationService = {
-  checkTinyHealth: async () => {
-    try {
-      const { token } = getTinyCredentials();
-      const res = await fetchWithTimeout('/api/tiny/validate', { 
-        method: 'POST', 
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token })
-      }, 5000);
-      return await res.json();
-    } catch (err) { return { status: 'error', message: 'Offline' }; }
-  },
-  checkMetaHealth: async () => {
-    try {
-      const res = await fetchWithTimeout('/api/meta/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
-      return await res.json();
-    } catch (err) { return { status: 'error', message: 'Offline' }; }
-  },
-  checkVndaHealth: async () => {
-    try {
-      const res = await fetchWithTimeout('/api/vnda/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
-      return await res.json();
-    } catch (err) { return { status: 'error', message: 'Offline' }; }
-  }
-};
-
-export const DashboardService = {
-  getOverview: async () => {
-    const ordersRes = await OrderService.getList();
-    return { pendingMessages: 0, productionQueue: ordersRes.data?.length || 0, nextShipment: 'Expedição Olie' };
-  },
-  getRecentActivity: async () => [
-    { id: 1, text: 'Monitoramento Ativo', highlight: 'Workspace', time: 'Agora' }
-  ]
-};
-
 export const AIService = {
   getDailyBriefing: async (overview: any) => {
+    const apiKey = (window as any).process?.env?.API_KEY;
+    if (!apiKey) return "Pronto para iniciar o dia no ateliê.";
+    
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
         contents: `Dados do ateliê Olie: ${overview.productionQueue} ordens. Gere briefing executivo curto e motivador.`,
@@ -251,16 +218,22 @@ export const AIService = {
     } catch (err) { return "Ateliê operando com excelência."; }
   },
   generateSmartReply: async (messages: Message[], clientName: string) => {
+    const apiKey = (window as any).process?.env?.API_KEY;
+    if (!apiKey) return "";
+    
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const context = messages.slice(-5).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
       const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Sugira resposta de luxo: ${context}` });
       return response.text;
     } catch (err) { return ""; }
   },
   analyzeConversation: async (messages: Message[], clientName: string) => {
+    const apiKey = (window as any).process?.env?.API_KEY;
+    if (!apiKey) return { summary: "IA indisponível" };
+
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const context = messages.slice(-10).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
@@ -281,11 +254,14 @@ export const AIService = {
         }
       });
       return JSON.parse(response.text || '{}');
-    } catch (err) { return { summary: "Erro", sentiment: "Neutro", style_profile: "N/A", next_step: "N/A", suggested_skus: [] }; }
+    } catch (err) { return { summary: "Análise suspensa", sentiment: "Neutro", style_profile: "N/A", next_step: "N/A", suggested_skus: [] }; }
   },
   generateProductPreview: async (prompt: string) => {
+    const apiKey = (window as any).process?.env?.API_KEY;
+    if (!apiKey) return null;
+
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts: [{ text: `Product photo: ${prompt}` }] },
@@ -325,6 +301,43 @@ export const ShippingService = {
     }
   } 
 };
+
+export const IntegrationService = {
+  checkTinyHealth: async () => {
+    try {
+      const { token } = getTinyCredentials();
+      const res = await fetchWithTimeout('/api/tiny/validate', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  },
+  checkMetaHealth: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/meta/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  },
+  checkVndaHealth: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/vnda/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  }
+};
+
+export const DashboardService = {
+  getOverview: async () => {
+    const ordersRes = await OrderService.getList();
+    return { pendingMessages: 0, productionQueue: ordersRes.data?.length || 0, nextShipment: 'Expedição Olie' };
+  },
+  getRecentActivity: async () => [
+    { id: 1, text: 'Monitoramento Ativo', highlight: 'Workspace', time: 'Agora' }
+  ]
+};
+
 export const OmnichannelService = { 
   sendMessage: async (source: string, id: string, text: string) => true 
 };

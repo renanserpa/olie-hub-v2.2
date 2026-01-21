@@ -2,9 +2,15 @@
 import { NextResponse } from 'next/server';
 import { TinyClient, errorResponse } from '../client.ts';
 
+/**
+ * Validação de conexão com o Tiny ERP
+ */
 export async function POST(request: Request) {
   try {
-    const { token } = await request.json();
+    const body = await request.json().catch(() => ({}));
+    const { token } = body;
+    
+    // Se o token vier no body, usa ele. Caso contrário, o TinyClient usará o process.env.TINY_API_TOKEN
     const client = new TinyClient(token);
     
     const result = await client.post('info.obter.php');

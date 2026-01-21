@@ -1,5 +1,7 @@
 {
   "name": "OlieHub V2",
   "description": "Sistema Operacional Centralizado para Ateliê Olie. Integração de ERP, E-commerce e Chat unificado.",
-  "requestFramePermissions": []
+  "requestFramePermissions": [
+    "geolocation"
+  ]
 }

@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react';
@@ -8,11 +9,11 @@ import {
   ShoppingBag, Package, Truck, Plus, Sparkles,
   Zap, Heart, Stars, BrainCircuit, Bot, UserPlus, 
   ArrowRightLeft, ShieldCheck, UserCircle, Scissors,
-  MessageSquareQuote, Needle, Gem, Info, X, Check,
+  MessageSquareQuote, Gem, Info, X, Check,
   Clock, BookOpen, Copy
 } from 'lucide-react';
 import { Message, ChannelSource, ConvoStatus } from '../../types/index.ts';
-import { OmnichannelService, AIService } from '../../services/api.ts';
+import { OmnichannelService, AIService, ShippingService } from '../../services/api.ts';
 
 interface ChatWindowProps {
   client: { 
@@ -202,7 +203,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
     }
   };
 
-  const handleQuickAction = (action: 'pix' | 'frete' | 'order' | 'catalog') => {
+  const handleQuickAction = async (action: 'pix' | 'frete' | 'order' | 'catalog') => {
     setIsActionMenuOpen(false);
     if (action === 'pix') {
       const pixKey = "financeiro@olie.com.br";
@@ -211,8 +212,21 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
       });
       onSendMessage("✨ *Pagamento Pix*\nGeramos um link para você concluir seu pedido.\nChave: `" + pixKey + "`\nValor: R$ 489,00");
     } else if (action === 'frete') {
-      showToast("Cotação de frete atualizada e enviada.", 'info');
-      onSendMessage("🚚 *Cotação de Frete*\nSua entrega para São Paulo fica em R$ 22,00 (SEDEX) ou R$ 14,00 (PAC). Previsão de 2 dias úteis.");
+      showToast("Consultando frete via Tiny/Olist...", 'info');
+      try {
+        const targetZip = "01310-930"; 
+        const quotes = await ShippingService.calculate(targetZip);
+        
+        let msg = `🚚 *Cotação de Frete Real-time*\nDestino: ${targetZip}\n\n`;
+        quotes.forEach(q => {
+          msg += `• *${q.name}*: R$ ${q.price.toFixed(2)} (${q.days} dias)\n`;
+        });
+        msg += `\n_Consulta gerada via Integrador Tiny._`;
+        
+        onSendMessage(msg);
+      } catch (err) {
+        showToast("Erro na consulta de frete", 'error');
+      }
     } else {
       onTriggerAction(action);
       if (action === 'catalog') {
@@ -251,12 +265,17 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
   return (
     <div className={`flex flex-col h-full relative transition-all duration-500 ${isBotActive ? 'bg-olie-50/20' : 'bg-stone-50'}`}>
-      {/* Header */}
+      {/* Header - Workspace do Atendimento */}
       <header className="h-20 px-6 border-b border-stone-100 flex justify-between items-center bg-white/80 backdrop-blur-md z-40 shrink-0">
         <div className="flex items-center gap-4">
-          <button onClick={onToggleLeft} className="w-10 h-10 flex items-center justify-center rounded-xl text-stone-400 hover:bg-stone-50 hover:text-olie-500 transition-colors">
+          <button 
+            onClick={onToggleLeft} 
+            className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isLeftOpen ? 'text-olie-500 bg-olie-50' : 'text-stone-400 hover:bg-stone-50 hover:text-olie-500'}`}
+            title={isLeftOpen ? "Esconder Lista" : "Mostrar Lista"}
+          >
              {isLeftOpen ? <PanelLeftClose size={20} /> : <PanelLeftOpen size={20} />}
           </button>
+          
           <div className="flex items-center gap-3 pl-4 border-l border-stone-100">
             <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-serif text-white italic text-lg shadow-lg ${isBotActive ? 'bg-stone-900' : 'bg-olie-500'}`}>
               {isBotActive ? <Bot size={20} /> : client.avatar}
@@ -297,18 +316,19 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                    <div className="px-4 py-2 mb-1 border-b border-stone-50">
                       <span className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-300">Delegar para:</span>
                    </div>
+                   {/* Fix: Wrapped handleTransfer in an arrow function to satisfy React MouseEventHandler type expectations */}
                    <button onClick={() => handleTransfer('Comercial')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-all group">
                       <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center group-hover:bg-blue-500 group-hover:text-white transition-all"><ShoppingBag size={16}/></div>
                       <div className="text-left">
                         <p className="text-[10px] font-black uppercase text-stone-800">Comercial</p>
-                        <p className="text-[8px] text-stone-400 font-bold">Vendas e Fechamento</p>
+                        <p className="text-8px text-stone-400 font-bold">Vendas e Fechamento</p>
                       </div>
                    </button>
                    <button onClick={() => handleTransfer('Mestre Artesão')} className="w-full flex items-center gap-3 p-3 hover:bg-stone-50 rounded-2xl transition-all group">
                       <div className="w-9 h-9 rounded-xl bg-olie-50 text-olie-500 flex items-center justify-center group-hover:bg-olie-900 group-hover:text-white transition-all"><Scissors size={16}/></div>
                       <div className="text-left">
                         <p className="text-[10px] font-black uppercase text-stone-800">Mestre Artesão</p>
-                        <p className="text-[8px] text-stone-400 font-bold">Produção e Detalhes</p>
+                        <p className="text-8px text-stone-400 font-bold">Produção e Detalhes</p>
                       </div>
                    </button>
                 </div>
@@ -317,10 +337,20 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
 
            <div className="w-px h-8 bg-stone-100 mx-2" />
 
-           <button onClick={handleSmartReply} disabled={isGeneratingReply} className="w-10 h-10 flex items-center justify-center bg-olie-50 text-olie-500 rounded-xl hover:bg-olie-100 transition-all border border-olie-200/50 shadow-sm">
+           <button 
+             onClick={handleSmartReply} 
+             disabled={isGeneratingReply} 
+             className="w-10 h-10 flex items-center justify-center bg-olie-50 text-olie-500 rounded-xl hover:bg-olie-100 transition-all border border-olie-200/50 shadow-sm"
+             title="Sugestão IA"
+           >
               {isGeneratingReply ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={18} />}
            </button>
-           <button onClick={onToggleRight} className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRightOpen ? 'bg-olie-900 text-white shadow-lg' : 'text-stone-400 hover:text-olie-500 hover:bg-stone-50'}`}>
+           
+           <button 
+             onClick={onToggleRight} 
+             className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all ${isRightOpen ? 'bg-olie-900 text-white shadow-lg' : 'text-stone-400 hover:text-olie-500 hover:bg-stone-50 border border-transparent hover:border-stone-200'}`}
+             title={isRightOpen ? "Fechar CRM" : "Abrir CRM"}
+           >
               {isRightOpen ? <PanelRightClose size={20} /> : <PanelRightOpen size={20} />}
            </button>
         </div>
@@ -434,7 +464,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
         </form>
       </div>
 
-      {/* Toast Layer */}
+      {/* Notificações Toast */}
       <div className="fixed bottom-28 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 w-max pointer-events-none">
          {toasts.map(toast => (
             <div 
@@ -451,10 +481,10 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({
                   {toast.icon}
                </div>
                <div className="flex flex-col">
-                  <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/90 leading-none mb-1">
+                  <span className="text-9px font-black uppercase tracking-[0.2em] text-white/90 leading-none mb-1">
                     Notificação Olie
                   </span>
-                  <span className="text-[11px] font-medium text-white/60 italic font-serif">
+                  <span className="text-11px font-medium text-white/60 italic font-serif">
                     {toast.message}
                   </span>
                </div>

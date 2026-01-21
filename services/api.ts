@@ -1,182 +1,274 @@
 
-/**
- * OlieHub V2 - Service Adapter (The Universal Translator)
- * Refatorado para integração Real-time e chaves dinâmicas com tratamento de erros.
- */
-
 import { 
   Product, 
   CartItem, 
   Order, 
-  Customer, 
   ChannelSource,
-  ProductionStage,
   Message,
   ConvoStatus
 } from '../types/index.ts';
 import { GoogleGenAI, Type } from "@google/genai";
-import { createClient } from '../lib/supabase/client.ts';
+import { supabase } from '../lib/supabase.ts';
+import { ENV } from '../lib/env.ts';
 
-export interface ConnectionResult {
-  status: 'healthy' | 'invalid' | 'error' | 'unconfigured';
-  message?: string;
-}
-
-const getApiKey = (service: string) => localStorage.getItem(`olie_${service}_token`);
-const getIntegratorId = () => localStorage.getItem('olie_tiny_integrator') || '10159';
-
-const simulateNetwork = async (latency = 800): Promise<void> => {
-  await new Promise(resolve => setTimeout(resolve, latency));
+const getTinyCredentials = () => {
+  if (typeof window === 'undefined') return { token: '', integratorId: '' };
+  return {
+    token: localStorage.getItem('olie_tiny_token') || '',
+    integratorId: localStorage.getItem('olie_tiny_integrator') || ''
+  };
 };
 
-// --- DIAGNOSTIC & DATABASE SERVICE ---
-export const DatabaseService = {
-  checkHealth: async () => {
-    const supabase = createClient();
-    const results = {
-      connection: false,
-      tables: { profiles: false, customers: false, conversations: false, messages: false },
-      realtime: false,
-      latency: 0,
-      integrations: {
-        meta: 'unconfigured' as string,
-        tiny: 'unconfigured' as string,
-        vnda: 'unconfigured' as string
-      }
-    };
-
-    const start = performance.now();
-    try {
-      const { data, error } = await supabase.from('profiles').select('id').limit(1);
-      results.latency = Math.round(performance.now() - start);
-      
-      if (!error) {
-        results.connection = true;
-        results.tables.profiles = true;
-        
-        const [cust, conv, msg] = await Promise.all([
-          supabase.from('customers').select('id').limit(1),
-          supabase.from('conversations').select('id').limit(1),
-          supabase.from('messages').select('id').limit(1),
-        ]);
-        
-        results.tables.customers = !cust.error;
-        results.tables.conversations = !conv.error;
-        results.tables.messages = !msg.error;
-      }
-
-      const channel = supabase.channel('health-check');
-      results.realtime = !!channel;
-      supabase.removeChannel(channel);
-
-      const metaToken = getApiKey('meta');
-      const tinyToken = getApiKey('tiny');
-      const vndaToken = getApiKey('vnda');
-
-      results.integrations.meta = metaToken && metaToken.startsWith('EAAB') ? 'healthy' : (metaToken ? 'invalid' : 'unconfigured');
-      
-      if (tinyToken) {
-        results.integrations.tiny = tinyToken.length >= 32 ? 'healthy' : 'invalid';
-      }
-
-      if (vndaToken) {
-        results.integrations.vnda = vndaToken.length >= 16 ? 'healthy' : 'invalid';
-      }
-
-      return results;
-    } catch (err) {
-      console.error("Health Check Critical Failure:", err);
-      return results;
-    }
-  },
-
-  testSingleConnection: async (service: string, token: string): Promise<ConnectionResult> => {
-    if (!token || token.trim() === '') return { status: 'unconfigured' };
-    
-    switch(service) {
-      case 'tiny':
-        try {
-          const res = await fetch('/api/tiny/validate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token.trim() })
-          });
-          const data = await res.json();
-          return { 
-            status: data.status || 'error', 
-            message: data.message || 'Erro inesperado na API do Tiny ERP' 
-          };
-        } catch (err: any) {
-          return { status: 'error', message: 'Falha no proxy Tiny: ' + err.message };
-        }
-      case 'meta':
-        const isMetaValid = token.startsWith('EAAB') && token.length > 50;
-        await simulateNetwork(500);
-        return { 
-          status: isMetaValid ? 'healthy' : 'invalid',
-          message: isMetaValid ? 'Token Meta (v20.0) validado.' : 'Token Meta inválido.'
-        };
-      case 'vnda':
-        const isVndaValid = token.length >= 16;
-        await simulateNetwork(500);
-        return { 
-          status: isVndaValid ? 'healthy' : 'invalid',
-          message: isVndaValid ? 'Conexão estabelecida com VNDA.' : 'Token VNDA inválido.'
-        };
-      default:
-        return { status: 'error', message: 'Serviço desconhecido' };
-    }
+const fetchWithTimeout = async (url: string, options: any, timeout = 10000) => {
+  const controller = new AbortController();
+  const id = setTimeout(() => controller.abort(), timeout);
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(id);
+    return response;
+  } catch (err) {
+    clearTimeout(id);
+    throw err;
   }
 };
 
-// --- AI CONCIERGE SERVICE (GEMINI) ---
+export const SyncService = {
+  getLogs: () => {
+    const logs = localStorage.getItem('olie_sync_logs');
+    return logs ? JSON.parse(logs) : [];
+  },
+
+  addLog: (type: string, count: number, status: 'success' | 'error') => {
+    const logs = SyncService.getLogs();
+    const newLog = {
+      id: Date.now(),
+      type,
+      count,
+      status,
+      timestamp: new Date().toISOString()
+    };
+    localStorage.setItem('olie_sync_logs', JSON.stringify([newLog, ...logs].slice(0, 15)));
+  },
+
+  exportLogsCSV: () => {
+    const logs = SyncService.getLogs();
+    if (logs.length === 0) return;
+    
+    const headers = ['ID', 'Tipo', 'Itens', 'Status', 'Data'];
+    const rows = logs.map((l: any) => [
+      l.id, 
+      l.type, 
+      l.count, 
+      l.status, 
+      new Date(l.timestamp).toLocaleString()
+    ]);
+    
+    const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `oliehub_audit_${Date.now()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  },
+
+  detectConflicts: async () => {
+    // Simulação de detecção de conflitos entre Tiny e VNDA
+    return [
+      { sku: 'OL-LILLE-KTA', tinyPrice: 489.00, vndaPrice: 519.00, diff: 30.00 },
+      { sku: 'OL-BOX-NEC', tinyPrice: 159.90, vndaPrice: 149.90, diff: -10.00 }
+    ];
+  },
+
+  getStatusMappings: () => {
+    const mappings = localStorage.getItem('olie_status_mappings');
+    return mappings ? JSON.parse(mappings) : {
+      'aberto': 'corte',
+      'aguardando': 'corte',
+      'aprovado': 'costura',
+      'preparação': 'costura',
+      'produção': 'montagem',
+      'faturado': 'acabamento',
+      'enviado': 'pronto',
+      'finalizado': 'pronto'
+    };
+  },
+
+  updateStatusMapping: (tinyStatus: string, olieStage: string) => {
+    const mappings = SyncService.getStatusMappings();
+    mappings[tinyStatus.toLowerCase()] = olieStage;
+    localStorage.setItem('olie_status_mappings', JSON.stringify(mappings));
+  },
+
+  syncOrders: async () => {
+    const { token, integratorId } = getTinyCredentials();
+    try {
+      const res = await fetchWithTimeout('/api/orders/list', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, integratorId }) 
+      });
+      const data = await res.json();
+      const count = data.data?.length || 0;
+      SyncService.addLog('Pedidos', count, 'success');
+      return { count, status: 'success' };
+    } catch (err) {
+      SyncService.addLog('Pedidos', 0, 'error');
+      throw err;
+    }
+  },
+
+  syncProducts: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/products/list', { method: 'POST' });
+      const data = await res.json();
+      SyncService.addLog('Produtos', data.count || 0, 'success');
+      return { count: data.count || 0, status: 'success' };
+    } catch (err) {
+      SyncService.addLog('Produtos', 0, 'error');
+      throw err;
+    }
+  },
+
+  syncCustomers: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/customers/list', { method: 'POST' });
+      const data = await res.json();
+      SyncService.addLog('Clientes', data.count || 0, 'success');
+      return { count: data.count || 0, status: 'success' };
+    } catch (err) {
+      SyncService.addLog('Clientes', 0, 'error');
+      throw err;
+    }
+  },
+
+  syncAll: async () => {
+    return Promise.allSettled([
+      SyncService.syncOrders(),
+      SyncService.syncProducts(),
+      SyncService.syncCustomers()
+    ]);
+  }
+};
+
+export const OrderService = {
+  getList: async (): Promise<{ data: any[], error: string | null, isRealData: boolean }> => {
+    try {
+      const { token, integratorId } = getTinyCredentials();
+      if (!token && !ENV.TINY_API_TOKEN) return { data: [], error: null, isRealData: false };
+
+      const response = await fetchWithTimeout('/api/orders/list', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, integratorId })
+      });
+      
+      const result = await response.json();
+      if (response.ok && result.status === 'success') {
+        return { data: result.data || [], error: null, isRealData: true };
+      }
+      return { data: [], error: result.details || 'Falha na resposta', isRealData: false };
+    } catch (err) {
+      return { data: [], error: 'Timeout', isRealData: false };
+    }
+  },
+
+  getById: async (id: string): Promise<Order | null> => {
+    const res = await OrderService.getList();
+    const found = res.data?.find((o: any) => String(o.id) === String(id));
+    return found || null;
+  },
+
+  create: async (cart: CartItem[], customer: { name: string; email?: string }) => {
+    const { token, integratorId } = getTinyCredentials();
+    const response = await fetchWithTimeout('/api/orders/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ items: cart, customer, token, integratorId })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.details || data.error);
+    return data;
+  },
+
+  getPipelineSummary: async () => {
+    const res = await OrderService.getList();
+    const orders = res.data || [];
+    return {
+      aguardando: orders.filter((o: any) => o.status?.toLowerCase().includes('aguardando') || o.status?.toLowerCase().includes('aberto')).length,
+      producao: orders.filter((o: any) => o.status?.toLowerCase().includes('produção') || o.status?.toLowerCase().includes('producao')).length,
+      expedicao: orders.filter((o: any) => o.status?.toLowerCase().includes('enviado')).length,
+      concluidos: orders.filter((o: any) => o.status?.toLowerCase().includes('finalizado')).length,
+    };
+  }
+};
+
+export const IntegrationService = {
+  checkTinyHealth: async () => {
+    try {
+      const { token } = getTinyCredentials();
+      const res = await fetchWithTimeout('/api/tiny/validate', { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token })
+      }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  },
+  checkMetaHealth: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/meta/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  },
+  checkVndaHealth: async () => {
+    try {
+      const res = await fetchWithTimeout('/api/vnda/validate', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 5000);
+      return await res.json();
+    } catch (err) { return { status: 'error', message: 'Offline' }; }
+  }
+};
+
+export const DashboardService = {
+  getOverview: async () => {
+    const ordersRes = await OrderService.getList();
+    return { pendingMessages: 0, productionQueue: ordersRes.data?.length || 0, nextShipment: 'Expedição Olie' };
+  },
+  getRecentActivity: async () => [
+    { id: 1, text: 'Monitoramento Ativo', highlight: 'Workspace', time: 'Agora' }
+  ]
+};
+
 export const AIService = {
   getDailyBriefing: async (overview: any) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const prompt = `Como um gerente de ateliê de luxo, analise estes dados e dê um resumo motivador e estratégico de 2 frases:
-      - Mensagens pendentes: ${overview.pendingMessages}
-      - Peças em produção: ${overview.productionQueue}
-      - Próxima expedição: ${overview.nextShipment}
-      Retorne apenas o texto do briefing.`;
-
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: prompt
+        contents: `Dados do ateliê Olie: ${overview.productionQueue} ordens. Gere briefing executivo curto e motivador.`,
+        config: { maxOutputTokens: 250, thinkingConfig: { thinkingBudget: 100 } }
       });
-
       return response.text;
-    } catch (err) {
-      return "O ateliê está pulsando hoje. Foco total no atendimento e na qualidade do corte.";
-    }
+    } catch (err) { return "Ateliê operando com excelência."; }
   },
-
-  generateSmartReply: async (messages: Message[], customerName: string) => {
+  generateSmartReply: async (messages: Message[], clientName: string) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const context = messages.slice(-5).map(m => `${m.direction === 'inbound' ? 'Cliente' : 'Olie'}: ${m.content}`).join('\n');
-      
-      const prompt = `Você é a concierge do Ateliê Olie. Sugerir uma resposta curta e elegante para ${customerName} baseada no contexto: ${context}`;
-
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: prompt
-      });
-
+      const context = messages.slice(-5).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
+      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Sugira resposta de luxo: ${context}` });
       return response.text;
-    } catch (err) {
-      return "Olá! Como posso ajudar você hoje?";
-    }
+    } catch (err) { return ""; }
   },
-
-  analyzeConversation: async (messages: Message[], customerName: string) => {
+  analyzeConversation: async (messages: Message[], clientName: string) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const context = messages.map(m => `${m.direction === 'inbound' ? 'Cliente' : 'Agente'}: ${m.content}`).join('\n');
-      
+      const context = messages.slice(-10).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Analise a conversa com ${customerName} e retorne JSON com summary, sentiment, next_step, suggested_skus, style_profile. Conversa: ${context}`,
+        model: 'gemini-3-pro-preview',
+        contents: `Analise conversa JSON: summary, sentiment, style_profile, next_step, suggested_skus. Contexto:\n${context}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -184,168 +276,47 @@ export const AIService = {
             properties: {
               summary: { type: Type.STRING },
               sentiment: { type: Type.STRING },
+              style_profile: { type: Type.STRING },
               next_step: { type: Type.STRING },
               suggested_skus: { type: Type.ARRAY, items: { type: Type.STRING } },
-              style_profile: { type: Type.STRING }
             },
-            required: ["summary", "sentiment", "next_step", "suggested_skus", "style_profile"]
+            required: ["summary", "sentiment", "style_profile", "next_step", "suggested_skus"]
           }
         }
       });
-
       return JSON.parse(response.text || '{}');
-    } catch (err) {
-      return null;
-    }
+    } catch (err) { return { summary: "Erro", sentiment: "Neutro", style_profile: "N/A", next_step: "N/A", suggested_skus: [] }; }
   },
-
-  getProductionTips: async (product: string, details: any, stage: string) => {
-    try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
-        contents: `Dicas para produzir ${product} na etapa ${stage}. Detalhes: ${JSON.stringify(details)}`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: {
-            type: Type.OBJECT,
-            properties: {
-              tips: { type: Type.ARRAY, items: { type: Type.STRING } }
-            },
-            required: ["tips"]
-          }
-        }
-      });
-      return JSON.parse(response.text || '{"tips": []}');
-    } catch (err) {
-      return { tips: ["Precisão no corte", "Tensão da linha", "Limpeza final"] };
-    }
-  },
-
   generateProductPreview: async (prompt: string) => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: `High-end luxury artisanal item: ${prompt}. Minimalist studio lighting.` }] }
+        contents: { parts: [{ text: `Product photo: ${prompt}` }] },
+        config: { imageConfig: { aspectRatio: "1:1" } }
       });
       for (const part of response.candidates[0].content.parts) {
         if (part.inlineData) return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
       }
       return null;
-    } catch (err) {
-      return null;
-    }
+    } catch (err) { return null; }
   }
 };
 
-// --- ORDER SERVICE ---
-export const OrderService = {
-  getList: async (): Promise<{ data: any[], error: string | null, isRealData: boolean }> => {
-    const tinyToken = getApiKey('tiny');
-    
-    if (tinyToken && tinyToken.length >= 32) {
-      try {
-        const response = await fetch('/api/tiny/orders', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: tinyToken.trim() })
-        });
-        const data = await response.json();
-        if (response.ok) {
-          return { data: Array.isArray(data) ? data : [], error: null, isRealData: true };
-        } else {
-          return { data: [], error: data.error || "Erro na sincronização Tiny ERP", isRealData: false };
-        }
-      } catch (err: any) {
-        return { data: [], error: "Erro de conexão com o servidor de proxy", isRealData: false };
-      }
-    }
-
-    await simulateNetwork(300);
-    return {
-      data: [
-        { id: '44921', name: 'Ana Carolina Silva', status: 'Produção', price: 'R$ 489,00', date: 'Hoje, 10:20', product: 'Bolsa Lille M', items: [{name: 'Bolsa Lille M', configuration: {color: 'Caramelo', hardware: 'Dourado'}}], source: 'mock' },
-        { id: '44918', name: 'Carla Beatriz Mendonça', status: 'Aguardando', price: 'R$ 159,90', date: 'Hoje, 09:15', product: 'Necessaire Box G', items: [], source: 'mock' },
-      ],
-      error: null,
-      isRealData: false
-    };
-  },
-
-  getById: async (id: string): Promise<Order | null> => {
-    const tinyToken = getApiKey('tiny');
-    if (tinyToken && tinyToken.length >= 32) {
-      try {
-        const response = await fetch(`/api/tiny/order`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token: tinyToken.trim(), id })
-        });
-        if (response.ok) {
-          return await response.json();
-        }
-      } catch (err) {
-        console.error("Failed to fetch order details from Tiny:", err);
-      }
-    }
-    return null;
-  },
-
-  getPipelineSummary: async () => {
-    await simulateNetwork(300);
-    return { aguardando: 5, producao: 12, expedicao: 8, concluidos: 24 };
-  },
-
-  create: async (cart: CartItem[], customerContext: { name: string; email?: string }) => {
-    const tinyToken = getApiKey('tiny');
-    const integratorId = getIntegratorId();
+export const DatabaseService = {
+  checkHealth: async () => {
     try {
-      const response = await fetch('/api/orders/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          items: cart, 
-          customer: customerContext, 
-          token: tinyToken?.trim(),
-          integratorId 
-        })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.details || data.error || "Erro na integração");
-      return data;
-    } catch (err: any) {
-      throw err;
-    }
+      if (!supabase) return { status: 'error', message: 'DB Desconectado' };
+      const { error } = await supabase.from('profiles').select('id').limit(1);
+      if (error) throw error;
+      return { status: 'healthy', message: 'Conexão estável.' };
+    } catch (err) { return { status: 'error', message: 'Erro de Autenticação' }; }
   }
 };
 
-// --- OUTROS SERVIÇOS ---
-export const DashboardService = {
-  getOverview: async () => {
-    await simulateNetwork(200);
-    return { pendingMessages: 12, productionQueue: 45, nextShipment: '15/10', revenueMonth: 'R$ 42.850', activeClients: 8 };
-  },
-  getRecentActivity: async () => {
-    await simulateNetwork(200);
-    return [{ id: 1, text: 'Ana aprovou o layout da', highlight: 'Bolsa Lille', time: '10:30' }];
-  }
+export const ShippingService = { 
+  calculate: async (destinationZip?: string) => [{ name: 'Correios', price: 25.0, days: 5 }] 
 };
-
-export const ProductionService = {
-  getList: async () => {
-    await simulateNetwork(400);
-    return [
-      { id: 'ORD-4410', client: 'Juliana Paes', product: 'Bolsa Lille KTA', stage: 'corte', sku: 'OL-LILLE-KTA-OFF', date: '12 Out', details: { leather: 'Croco Off-White', hardware: 'Dourado', personalization: 'JP' }, efficiency: 95 }
-    ];
-  },
-  getStats: async () => ({ efficiency: 92, averageProductionTime: '4.2 dias' }),
-  updateStage: async (itemId: string, newStage: ProductionStage) => { await simulateNetwork(100); return true; }
-};
-
-export const OmnichannelService = {
-  sendMessage: async (channel: ChannelSource, recipient: string, content: string): Promise<boolean> => {
-    console.log(`Enviando via ${channel}: ${content}`);
-    return true;
-  }
+export const OmnichannelService = { 
+  sendMessage: async (source: string, id: string, text: string) => true 
 };

@@ -1,19 +1,17 @@
-
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { ENV } from '../env.ts';
 
 /**
  * Cria uma instância do cliente Supabase para operações que exigem contexto de servidor.
- * Sincronizado com as configurações dinâmicas do OlieHub.
+ * Prioriza chaves do objeto ENV.
  */
 export function createClient() {
-  const storedUrl = typeof window !== 'undefined' ? localStorage.getItem('olie_supabase_url') : null;
-  const storedKey = typeof window !== 'undefined' ? localStorage.getItem('olie_supabase_key') : null;
+  const SUPABASE_URL = ENV.SUPABASE_URL;
+  const SUPABASE_ANON_KEY = ENV.SUPABASE_ANON_KEY;
 
-  const DEFAULT_URL = 'https://ijheukynkppcswgtrnwd.supabase.co';
-  const DEFAULT_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlqaGV1a3lua3BwY3N3Z3RybndkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI0NDM3OTEsImV4cCI6MjA3ODAxOTc5MX0.6t0sHi76ORNE_aEaanLYoPNuIGGkyKaCNooYBjDBMM4';
-
-  const SUPABASE_URL = storedUrl || DEFAULT_URL;
-  const SUPABASE_ANON_KEY = storedKey || DEFAULT_KEY;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
+    throw new Error('Server Client Error: Missing Supabase Credentials in lib/env.ts.');
+  }
 
   return createServerClient(
     SUPABASE_URL,

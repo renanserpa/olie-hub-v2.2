@@ -1,64 +1,99 @@
 
 <!DOCTYPE html>
-<html lang="pt-BR" class="h-full">
+<html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OlieHub V2 Enterprise</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+    <title>OlieHub V2 | Sistema Operacional Artesanal</title>
     
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;0,900;1,400;1,700&display=swap" rel="stylesheet" />
+    <!-- Google Fonts: Inter & Playfair Display -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Playfair+Display:ital,wght@0,400..900;1,400..900&display=swap" rel="stylesheet">
     
+    <!-- Tailwind CSS Engine -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" type="text/tailwindcss" href="app/globals.css">
-
-    <script>
-      // Definição imediata do ambiente para evitar ReferenceError: process
-      window.process = { env: {} };
-      window.global = window;
-    </script>
-
-    <script>
-      window.tailwind = {
-        config: {
-          theme: {
-            extend: {
-              colors: {
-                olie: { rose: '#C08A7D', cream: '#FAF9F6', stone: '#4A3B38', 50: '#FAF7F6', 100: '#F5EFED', 300: '#DCC3BC', 500: '#C08A7D', 900: '#4A3B38' },
-                stone: { 50: '#FAF9F6', 100: '#F5F5F4', 200: '#E7E5E4', 300: '#D6D3D1', 400: '#A8A29E', 500: '#78716C', 600: '#57534E', 700: '#44403C', 800: '#292524', 900: '#1C1917' }
-              },
-              fontFamily: { sans: ['Inter', 'sans-serif'], serif: ['Playfair Display', 'serif'] },
-              boxShadow: { 'olie-soft': '0 4px 20px -2px rgba(192, 138, 125, 0.08)', 'olie-lg': '0 20px 50px -12px rgba(192, 138, 125, 0.15)' },
-              borderRadius: { '4xl': '2rem', '5xl': '3rem' }
-            }
-          }
-        }
-      }
-    </script>
-
+    
+    <!-- Import Map para ESM nativo -->
     <script type="importmap">
 {
   "imports": {
     "react": "https://esm.sh/react@19.0.0",
     "react/": "https://esm.sh/react@19.0.0/",
     "react-dom": "https://esm.sh/react-dom@19.0.0",
+    "react-dom/": "https://esm.sh/react-dom@19.0.0/",
     "react-dom/client": "https://esm.sh/react-dom@19.0.0/client",
     "lucide-react": "https://esm.sh/lucide-react@0.469.0?external=react",
-    "sonner": "https://esm.sh/sonner@1.7.1?external=react,react-dom",
+    "sonner": "https://esm.sh/sonner@2.0.7?external=react,react-dom",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.47.10",
-    "@google/genai": "https://esm.sh/@google/genai@0.21.0",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@supabase/ssr": "https://esm.sh/@supabase/ssr@^0.8.0",
+    "@google/genai": "https://esm.sh/@google/genai@1.38.0",
     "next/": "https://esm.sh/next@^16.1.4/",
     "tailwindcss": "https://esm.sh/tailwindcss@^4.1.18",
-    "crypto": "https://esm.sh/crypto@^1.0.1"
+    "@supabase/ssr": "https://esm.sh/@supabase/ssr@^0.8.0",
+    "crypto": "https://esm.sh/crypto@^1.0.1",
+    "@tanstack/react-query": "https://esm.sh/@tanstack/react-query@5.62.7?external=react",
+    "zod": "https://esm.sh/zod@3.24.1"
   }
 }
 </script>
+    
+    <style>
+        :root {
+            --olie-rose: #C08A7D;
+            --olie-cream: #FAF9F6;
+            --olie-stone: #4A3B38;
+            --olie-50: #FAF7F6;
+            --olie-100: #F5EFED;
+            --olie-300: #DCC3BC;
+            --olie-500: #C08A7D;
+            --olie-900: #4A3B38;
+            --font-inter: 'Inter', system-ui, sans-serif;
+            --font-playfair: 'Playfair Display', serif;
+        }
+
+        body, html { 
+            margin: 0; 
+            padding: 0; 
+            height: 100%; 
+            background: #FAF9F6; 
+            font-family: var(--font-inter);
+            color: #44403C;
+            -webkit-font-smoothing: antialiased;
+            overflow: hidden;
+        }
+        
+        #root { height: 100%; }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: var(--font-playfair);
+            color: var(--olie-900);
+            letter-spacing: -0.02em;
+        }
+
+        .olie-card {
+            background: white;
+            border: 1px solid rgba(74, 59, 56, 0.05);
+            border-radius: 2.5rem;
+            box-shadow: 0 4px 20px -2px rgba(192, 138, 125, 0.08);
+            transition: all 0.5s ease;
+        }
+
+        .olie-card:hover {
+            box-shadow: 0 20px 50px -12px rgba(192, 138, 125, 0.15);
+            border-color: rgba(192, 138, 125, 0.1);
+        }
+
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        ::selection {
+            background: rgba(192, 138, 125, 0.2);
+            color: #4A3B38;
+        }
+    </style>
 </head>
-<body class="bg-stone-50 overflow-hidden h-full">
-    <div id="root" class="h-full"></div>
+<body>
+    <div id="root"></div>
     <script type="module" src="index.tsx"></script>
 </body>
 </html>

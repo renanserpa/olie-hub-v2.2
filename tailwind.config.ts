@@ -2,37 +2,33 @@
 import type { Config } from "tailwindcss";
 
 const config: Config = {
+  darkMode: "class",
   content: [
-    "./index.html",
-    "./index.tsx",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./lib/**/*.{js,ts,jsx,tsx,mdx}",
     "./services/**/*.{js,ts,jsx,tsx,mdx}",
-    "./hooks/**/*.{js,ts,jsx,tsx,mdx}"
+    "./hooks/**/*.{js,ts,jsx,tsx,mdx}",
+    "./utils/**/*.{js,ts,jsx,tsx,mdx}"
   ],
   theme: {
     extend: {
       colors: {
-        // Olie Hub V2 - Brand Identity Palette (Luxury Atelier)
         olie: {
-          rose: '#C08A7D',   // Rose Olie (Base)
-          cream: '#FAF9F6',  // Cream Olie (Background)
-          stone: '#4A3B38',  // Stone Olie (Contrast/Text)
-          
-          // Technical Scale for UI states and depths
+          rose: '#C08A7D',
+          cream: '#FAF9F6',
+          stone: '#4A3B38',
           50: '#FAF7F6',
           100: '#F5EFED',
           200: '#EBE4E2',
           300: '#DCC3BC',
           400: '#CEADA5',
-          500: '#C08A7D', // Primary Action
+          500: '#C08A7D',
           600: '#A66D60',
           700: '#8C5A4F',
           800: '#724940',
-          900: '#4A3B38', // Deep Contrast
+          900: '#4A3B38',
         },
-        // System Neutrals - Stone Scale (Sophisticated Grays)
         stone: {
           50: '#FAF9F6', 
           100: '#F5F5F4',
@@ -44,32 +40,11 @@ const config: Config = {
           700: '#44403C',
           800: '#292524',
           900: '#1C1917',
-        },
-        // Semantic Accents with Olie undertones
-        emerald: {
-          50: '#ECFDF5',
-          500: '#10B981',
-          600: '#059669',
-        },
-        rose: {
-          50: '#FFF1F2',
-          500: '#F43F5E',
-          600: '#E11D48',
-        },
-        amber: {
-          50: '#FFFBEB',
-          500: '#F59E0B',
-          600: '#D97706',
-        },
-        blue: {
-          50: '#EFF6FF',
-          500: '#3B82F6',
-          600: '#2563EB',
         }
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'sans-serif'],
-        serif: ['Playfair Display', 'ui-serif', 'Georgia', 'serif'],
+        sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        serif: ['var(--font-playfair)', 'ui-serif', 'Georgia', 'serif'],
       },
       boxShadow: {
         'olie-soft': '0 4px 20px -2px rgba(192, 138, 125, 0.08)',
@@ -80,21 +55,6 @@ const config: Config = {
         '3xl': '1.5rem',
         '4xl': '2rem',
         '5xl': '3rem',
-      },
-      animation: {
-        'slow-spin': 'spin 12s linear infinite',
-        'fade-in': 'fade-in 0.5s ease-out',
-        'slide-up': 'slide-up 0.5s ease-out',
-      },
-      keyframes: {
-        'fade-in': {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        'slide-up': {
-          '0%': { transform: 'translateY(10px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        }
       }
     }
   },

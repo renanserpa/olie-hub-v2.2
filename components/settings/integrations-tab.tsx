@@ -35,13 +35,33 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({ config, setCon
 
   const checkAllHealth = async () => {
     setHealth({ db: 'loading', tiny: 'loading', meta: 'loading', vnda: 'loading' });
-    const [dbRes, tinyRes, metaRes, vndaRes] = await Promise.all([
-      DatabaseService.checkHealth(),
-      IntegrationService.checkTinyHealth(),
-      IntegrationService.checkMetaHealth(),
-      IntegrationService.checkVndaHealth()
-    ]);
-    setHealth({ db: dbRes.status, tiny: tinyRes.status, meta: metaRes.status, vnda: vndaRes.status });
+    
+    // Executa validações usando os valores atuais dos campos de configuração (UI)
+    // para permitir testes antes mesmo de salvar no localStorage
+    try {
+      const [dbRes, tinyRes, metaRes, vndaRes] = await Promise.all([
+        DatabaseService.checkHealth(),
+        IntegrationService.checkTinyHealth(config.tiny_token),
+        IntegrationService.checkMetaHealth(config.meta_token),
+        IntegrationService.checkVndaHealth(config.vnda_token)
+      ]);
+      
+      setHealth({ 
+        db: dbRes.status, 
+        tiny: tinyRes.status, 
+        meta: metaRes.status, 
+        vnda: vndaRes.status 
+      });
+
+      if (tinyRes.status === 'healthy') toast.success('Tiny ERP: Conexão Validada');
+      else if (tinyRes.status === 'error') toast.error('Tiny ERP: Falha de Autenticação');
+
+      if (metaRes.status === 'healthy') toast.success('Meta API: Canal Ativo');
+      if (vndaRes.status === 'healthy') toast.success('VNDA: E-commerce Sincronizado');
+
+    } catch (err) {
+      toast.error('Erro ao executar varredura de saúde.');
+    }
   };
 
   const performSync = async (type: 'orders' | 'products' | 'customers') => {
@@ -186,7 +206,7 @@ export const IntegrationsTab: React.FC<IntegrationsTabProps> = ({ config, setCon
 function HealthCard({ title, status, icon }: any) {
   const isHealthy = status === 'healthy';
   const isLoading = status === 'loading';
-  const isError = status === 'error' || status === 'invalid';
+  const isError = status === 'error' || status === 'invalid' || status === 'unconfigured';
 
   return (
     <div className="bg-white p-8 rounded-[2.5rem] border border-stone-100 shadow-olie-soft hover:shadow-olie-lg transition-all group">
@@ -199,7 +219,7 @@ function HealthCard({ title, status, icon }: any) {
       <div className="flex items-center gap-2">
          <div className={`w-1.5 h-1.5 rounded-full ${isHealthy ? 'bg-emerald-500 animate-pulse' : isError ? 'bg-rose-500' : 'bg-stone-200'}`} />
          <span className={`text-[11px] font-black uppercase tracking-tight italic ${isHealthy ? 'text-emerald-900' : isError ? 'text-rose-900' : 'text-stone-400'}`}>
-           {isLoading ? 'Checking...' : isHealthy ? 'Conectado' : 'Interrompido'}
+           {isLoading ? 'Verificando...' : isHealthy ? 'Conectado' : isError ? 'Interrompido' : 'Pendente'}
          </span>
       </div>
     </div>

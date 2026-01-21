@@ -2,57 +2,58 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
   ArrowRight, Sparkles, Calendar, MessageCircle, Scissors, 
   ChevronRight, BrainCircuit, Loader2, ShoppingBag, Star, 
   Clock, History, Zap, ArrowUpRight, Bell, RefreshCcw
 } from 'lucide-react';
 import { DashboardService, AIService, SyncService } from '../services/api.ts';
+import { toast } from 'sonner';
 
 export default function DashboardPage() {
-  const [overview, setOverview] = useState<any>({ pendingMessages: 0, productionQueue: 0, nextShipment: '...' });
-  const [activity, setActivity] = useState<any[]>([]);
+  const queryClient = useQueryClient();
   const [aiBriefing, setAiBriefing] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [loadingBriefing, setLoadingBriefing] = useState(false);
 
-  const loadData = async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const [ov, ac] = await Promise.all([
-        DashboardService.getOverview(),
-        DashboardService.getRecentActivity()
-      ]);
-      setOverview(ov);
-      setActivity(ac);
-      setLoading(false); // Libera a UI principal imediatamente
+  // KPIs em Tempo Real via Query
+  const { data: overview, isLoading: loadingOverview } = useQuery({
+    queryKey: ['dashboard-overview'],
+    queryFn: () => DashboardService.getOverview(),
+    refetchInterval: 30000, // Revalida a cada 30s
+  });
 
-      // Briefing AI carrega em background para não travar a página
-      setLoadingBriefing(true);
-      const briefing = await AIService.getDailyBriefing(ov);
+  const { data: activity = [], isLoading: loadingActivity } = useQuery({
+    queryKey: ['dashboard-activity'],
+    queryFn: () => DashboardService.getRecentActivity(),
+  });
+
+  const loadBriefing = async () => {
+    if (!overview) return;
+    setLoadingBriefing(true);
+    try {
+      const briefing = await AIService.getDailyBriefing(overview);
       setAiBriefing(briefing);
     } catch (err) {
-      console.error("Dashboard Load Error:", err);
-      setLoading(false);
+      console.error("AI Briefing Error:", err);
     } finally {
       setLoadingBriefing(false);
     }
   };
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (overview) loadBriefing();
+  }, [overview?.productionQueue]);
 
   const handleFullSync = async () => {
-    setIsSyncing(true);
+    const syncToast = toast.loading("Executando sincronização profunda...");
     try {
       await SyncService.syncAll();
-      await loadData(true);
+      queryClient.invalidateQueries({ queryKey: ['dashboard-overview'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-activity'] });
+      toast.success("Workspace Sincronizado", { id: syncToast });
     } catch (err) {
-      console.error("Sync Error:", err);
-    } finally {
-      setIsSyncing(false);
+      toast.error("Falha na sincronização", { id: syncToast });
     }
   };
 
@@ -60,17 +61,17 @@ export default function DashboardPage() {
     window.location.hash = path;
   };
 
-  const getActivityIcon = (text: string, highlight: string) => {
-    const content = (text + highlight).toLowerCase();
-    if (content.includes('pedido')) return <ShoppingBag size={18} />;
-    if (content.includes('whatsapp')) return <MessageCircle size={18} />;
+  const getActivityIcon = (highlight: string) => {
+    const content = highlight.toLowerCase();
+    if (content.includes('pedidos')) return <ShoppingBag size={18} />;
+    if (content.includes('clientes')) return <Users size={18} />;
     return <Zap size={18} />;
   };
 
-  if (loading) return (
+  if (loadingOverview) return (
     <div className="flex-1 flex items-center justify-center bg-stone-50">
       <div className="flex flex-col items-center gap-4">
-        <div className="w-16 h-16 border-2 border-olie-500/10 border-t-olie-500 rounded-full animate-spin" />
+        <Loader2 className="w-16 h-16 text-olie-500 animate-spin" />
         <p className="font-serif italic text-stone-300">Conectando ao Workspace...</p>
       </div>
     </div>
@@ -96,13 +97,10 @@ export default function DashboardPage() {
 
           <button 
             onClick={handleFullSync}
-            disabled={isSyncing}
-            className={`h-16 px-8 rounded-3xl flex items-center gap-4 transition-all border font-black uppercase text-[10px] tracking-[0.2em] shadow-xl ${
-              isSyncing ? 'bg-stone-100 text-stone-400 border-stone-200' : 'bg-white text-stone-800 border-stone-100 hover:border-olie-500/30'
-            }`}
+            className="h-16 px-8 rounded-3xl flex items-center gap-4 transition-all border font-black uppercase text-[10px] tracking-[0.2em] shadow-xl bg-white text-stone-800 border-stone-100 hover:border-olie-500/30"
           >
-            {isSyncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCcw size={16} className="text-olie-500" />}
-            {isSyncing ? 'Sincronizando...' : 'Sincronizar Tudo'}
+            <RefreshCcw size={16} className="text-olie-500" />
+            Sincronizar Tudo
           </button>
         </header>
 
@@ -144,7 +142,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <h3 className="text-5xl font-serif italic text-[#1A1A1A] mb-2 tracking-tighter">{overview?.pendingMessages || 0}</h3>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300">Mensagens Pendentes</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300">Mensagens em Fila</p>
           </div>
 
           <div onClick={() => navigateTo('/production')} className="bg-white p-10 rounded-[2.5rem] border border-[#F2F0EA] hover:border-olie-500/30 hover:shadow-olie-lg transition-all cursor-pointer group">
@@ -154,7 +152,7 @@ export default function DashboardPage() {
               </div>
             </div>
             <h3 className="text-5xl font-serif italic text-[#1A1A1A] mb-2 tracking-tighter">{overview?.productionQueue || 0}</h3>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300">Em Produção</p>
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300">Ordens nas Bancadas</p>
           </div>
 
           <div className="bg-[#1C1917] p-10 rounded-[2.5rem] text-white group shadow-2xl relative overflow-hidden">
@@ -179,7 +177,7 @@ export default function DashboardPage() {
               <div key={i} className="group bg-white p-6 rounded-[2.5rem] border border-[#F2F0EA] hover:shadow-olie-lg transition-all flex items-center justify-between">
                 <div className="flex items-center gap-8">
                    <div className="w-14 h-14 bg-stone-50 rounded-[1.8rem] flex items-center justify-center text-stone-300 group-hover:bg-olie-50 group-hover:text-olie-500 transition-all">
-                      {getActivityIcon(item.text, item.highlight)}
+                      {getActivityIcon(item.highlight)}
                    </div>
                    <div className="flex flex-col gap-1">
                       <p className="text-lg text-stone-600 font-light">

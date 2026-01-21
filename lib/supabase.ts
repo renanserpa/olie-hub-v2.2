@@ -7,12 +7,17 @@ export const getSupabase = () => {
   if (supabaseInstance) return supabaseInstance;
 
   const isBrowser = typeof window !== 'undefined';
-  const env = (isBrowser && (window as any).process?.env) ? (window as any).process.env : {};
   
-  const url = env.NEXT_PUBLIC_SUPABASE_URL || localStorage.getItem('olie_supabase_url') || '';
-  const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY || localStorage.getItem('olie_supabase_key') || '';
+  // No ambiente de simulação, process.env pode não estar disponível globalmente
+  // tentamos ler de múltiplas fontes para garantir o carregamento
+  const url = (isBrowser ? localStorage.getItem('olie_supabase_url') : '') || 
+              (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_SUPABASE_URL : '') || '';
+              
+  const key = (isBrowser ? localStorage.getItem('olie_supabase_key') : '') || 
+              (typeof process !== 'undefined' ? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY : '') || '';
 
   if (!url || !key || url.length < 10) {
+    console.warn("[OlieHub] Configurações de Banco de Dados não detectadas.");
     return null;
   }
 
@@ -26,12 +31,11 @@ export const getSupabase = () => {
     });
     return supabaseInstance;
   } catch (err) {
-    console.error("[OlieHub] Erro ao criar cliente Supabase:", err);
+    console.error("[OlieHub] Erro na criação do cliente Supabase:", err);
     return null;
   }
 };
 
-// Exportamos a constante para compatibilidade, mas ela pode ser null no primeiro momento
 export const supabase = getSupabase();
 
 export const resetSupabaseClient = () => {

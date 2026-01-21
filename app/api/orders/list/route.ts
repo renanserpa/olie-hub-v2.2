@@ -1,20 +1,23 @@
 
 import { NextResponse } from 'next/server';
 import { TinyClient } from '../tiny/client.ts';
-import { supabase } from '../../../lib/supabase.ts';
+import { getSupabase } from '../../../lib/supabase.ts';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     const { token, integratorId } = body;
 
+    // Se o token não for enviado no body, o TinyClient tentará usar o process.env.TINY_API_TOKEN internamente
     const client = new TinyClient(token);
     const result = await client.post('pedidos.pesquisa.php');
     
+    const supabase = getSupabase();
+
     if (result.status === 'success' && supabase) {
       const tinyOrders = result.data.pedidos || [];
       
-      // Sincronização Inteligente
+      // Sincronização Silenciosa com Supabase
       const upsertData = tinyOrders.map((o: any) => ({
         tiny_order_id: o.pedido.id.toString(),
         customer_name: o.pedido.nome,
@@ -25,8 +28,8 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString()
       }));
 
-      const { error } = await supabase.from('orders').upsert(upsertData, { onConflict: 'tiny_order_id' });
-      if (error) console.error("[SYNC_ORDER_ERROR]", error);
+      // Tentativa de upsert, mas não trava se falhar (o ERP é a fonte da verdade aqui)
+      await supabase.from('orders').upsert(upsertData, { onConflict: 'tiny_order_id' }).catch(console.error);
 
       return NextResponse.json({ 
         status: 'success', 
@@ -41,8 +44,17 @@ export async function POST(request: Request) {
       });
     }
 
+    if (result.status === 'empty') {
+      return NextResponse.json({ status: 'success', data: [] });
+    }
+
     return NextResponse.json(result);
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    console.error("[API_ORDERS_ERROR]", err);
+    return NextResponse.json({ 
+      status: 'error', 
+      error: 'Erro na Ponte Tiny ERP',
+      details: err.message 
+    }, { status: 500 });
   }
 }

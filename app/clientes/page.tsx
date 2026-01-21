@@ -2,34 +2,63 @@
 "use client";
 
 import React, { useState, useMemo } from 'react';
-import { Users, Search, Filter, Star, TrendingUp, Mail, Phone, ChevronRight, Plus, Heart, Award, Diamond } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Users, Search, Star, TrendingUp, Mail, Phone, Plus, Heart, Award, Diamond, Loader2, RefreshCcw } from 'lucide-react';
 import { ClientDetailDrawer } from '../../components/clientes/client-detail-drawer.tsx';
+import { useSearch } from '../../contexts/SearchContext.tsx';
 import { Customer } from '../../types/index.ts';
+import { CustomerService, SyncService } from '../../services/api.ts';
+import { DataAlert } from '../../components/shared/data-alert.tsx';
+import { toast } from 'sonner';
 
 export default function ClientesPage() {
+  const queryClient = useQueryClient();
   const [selectedClient, setSelectedClient] = useState<Customer | null>(null);
   const [activeSegment, setActiveSegment] = useState<'Todos' | 'VIP' | 'Leads'>('Todos');
-  const [searchTerm, setSearchTerm] = useState('');
+  const { searchTerm } = useSearch();
 
-  // Added created_at to all mock customers to fix property missing error
-  const clients: Customer[] = [
-    { id: '1', full_name: 'Ana Carolina Silva', email: 'ana.carol@email.com', phone: '(11) 98888-7777', ltv: 2400, total_orders: 4, tags: ['VIP', 'Lille Lover'], channel_source: 'whatsapp', created_at: '2023-01-15T10:00:00Z' },
-    { id: '2', full_name: 'Bia Mendonça', email: 'bia.m@email.com', phone: '(21) 97777-6666', ltv: 890, total_orders: 1, tags: ['Lead Quente'], channel_source: 'instagram', created_at: '2023-05-20T14:30:00Z' },
-    { id: '3', full_name: 'Juliana Paes', email: 'jupaes@email.com', phone: '(11) 96666-5555', ltv: 5200, total_orders: 12, tags: ['VIP Gold', 'Recorrente'], channel_source: 'whatsapp', created_at: '2022-11-02T09:15:00Z' },
-    { id: '4', full_name: 'Mariana Oliveira', email: 'mari.o@email.com', phone: '(31) 95555-4444', ltv: 1420, total_orders: 2, tags: ['Minimalista'], channel_source: 'pinterest', created_at: '2023-03-10T11:45:00Z' },
-    { id: '5', full_name: 'Camila Queiroz', email: 'camila.q@email.com', phone: '(11) 94444-3333', ltv: 3100, total_orders: 5, tags: ['VIP', 'Fidélidade'], channel_source: 'instagram', created_at: '2023-02-28T16:20:00Z' },
-    { id: '6', full_name: 'Bruna Marquezine', email: 'bruna.m@email.com', phone: '(21) 93333-2222', ltv: 8500, total_orders: 18, tags: ['Collector', 'VIP Platinum'], channel_source: 'whatsapp', created_at: '2022-08-14T13:10:00Z' },
-  ];
+  const { 
+    data: response = { data: [], error: null }, 
+    isLoading, 
+    isFetching 
+  } = useQuery({
+    queryKey: ['customers'],
+    queryFn: () => CustomerService.getList(),
+  });
+
+  const clients = response.data || [];
+  
+  const handleSync = async () => {
+    const toastId = toast.loading("Sincronizando com o ERP...");
+    try {
+      await SyncService.syncCustomers();
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      toast.success("Base de clientes atualizada", { id: toastId });
+    } catch (err) {
+      toast.error("Falha na sincronização", { id: toastId });
+    }
+  };
 
   const filteredClients = useMemo(() => {
     return clients.filter(c => {
-      const matchesSearch = c.full_name.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = c.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                           c.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                           c.phone?.includes(searchTerm);
       const matchesSegment = activeSegment === 'Todos' || 
                             (activeSegment === 'VIP' && c.ltv > 2000) || 
                             (activeSegment === 'Leads' && c.total_orders === 0);
       return matchesSearch && matchesSegment;
     });
-  }, [searchTerm, activeSegment]);
+  }, [searchTerm, activeSegment, clients]);
+
+  if (isLoading) return (
+    <div className="flex-1 flex flex-col items-center justify-center bg-stone-50">
+       <div className="flex flex-col items-center gap-6">
+          <Loader2 className="w-16 h-16 text-olie-500 animate-spin" />
+          <p className="font-serif italic text-stone-300 text-lg">Mapeando base de relacionamento...</p>
+       </div>
+    </div>
+  );
 
   return (
     <main className="flex-1 flex flex-col overflow-hidden h-full bg-[#FAF9F6]">
@@ -40,14 +69,19 @@ export default function ClientesPage() {
         </div>
         
         <div className="flex items-center gap-8">
-          <div className="hidden lg:flex -space-x-3">
-            {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className="w-10 h-10 rounded-full border-2 border-white bg-stone-100 overflow-hidden shadow-sm hover:translate-y-1 transition-transform cursor-pointer">
-                <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=v${i}`} alt="user" />
-              </div>
-            ))}
-            <div className="w-10 h-10 rounded-full border-2 border-white bg-olie-900 flex items-center justify-center text-[9px] font-black text-white shadow-sm">+84</div>
+          <div className="relative group">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-300 group-focus-within:text-olie-500 transition-colors" size={16} />
+            <div className="bg-stone-50 border border-stone-100 rounded-2xl pl-12 pr-6 py-3 text-[10px] font-black uppercase text-stone-400 tracking-widest min-w-64">
+              {searchTerm || 'Filtro Global Ativo'}
+            </div>
           </div>
+          <button 
+            onClick={handleSync}
+            disabled={isFetching}
+            className="w-12 h-12 flex items-center justify-center bg-stone-50 border border-stone-100 rounded-2xl text-stone-400 hover:text-olie-500 transition-all"
+          >
+            <RefreshCcw size={20} className={isFetching ? 'animate-spin' : ''} />
+          </button>
           <div className="h-8 w-px bg-stone-100" />
           <button className="h-12 px-6 bg-olie-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-olie-500/20 flex items-center gap-2 hover:bg-olie-600 transition-all">
             <Plus size={16} />
@@ -58,7 +92,8 @@ export default function ClientesPage() {
 
       <div className="flex-1 overflow-y-auto scrollbar-hide p-12 space-y-12 max-w-7xl mx-auto w-full">
         
-        {/* CRM Stats Section - Heroic */}
+        <DataAlert error={response.error} context="Base de Clientes (Supabase)" />
+
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
           <div className="bg-stone-900 p-10 rounded-[3rem] text-white relative overflow-hidden group shadow-2xl">
              <div className="absolute -right-12 -top-12 opacity-10 group-hover:scale-110 transition-transform duration-1000 rotate-12">
@@ -66,7 +101,7 @@ export default function ClientesPage() {
              </div>
              <div className="relative z-10 space-y-8">
                <span className="text-[10px] font-black text-stone-500 uppercase tracking-[0.4em]">Equity da Base</span>
-               <h2 className="text-5xl font-serif italic leading-none">R$ 1.840 <span className="text-sm text-emerald-400 not-italic font-sans ml-2">+12.4%</span></h2>
+               <h2 className="text-5xl font-serif italic leading-none">R$ {(clients.reduce((acc, c) => acc + (c.ltv || 0), 0) / (clients.length || 1)).toFixed(0)} <span className="text-sm text-emerald-400 not-italic font-sans ml-2">+12.4%</span></h2>
                <p className="text-xs text-stone-400 font-medium leading-relaxed italic">Base VIP em expansão orgânica qualificada.</p>
              </div>
           </div>
@@ -77,7 +112,7 @@ export default function ClientesPage() {
                   <span className="text-[10px] font-black text-stone-300 uppercase tracking-[0.4em]">Novos Leads</span>
                   <div className="w-8 h-8 rounded-xl bg-olie-50 text-olie-500 flex items-center justify-center"><TrendingUp size={14}/></div>
                 </div>
-                <h3 className="text-4xl font-serif italic text-olie-900">+42 Ativos</h3>
+                <h3 className="text-4xl font-serif italic text-olie-900">+{clients.length} Ativos</h3>
                 <div className="w-full h-1 bg-stone-50 rounded-full overflow-hidden">
                    <div className="h-full bg-olie-500 w-[65%] animate-in slide-in-from-left duration-1000" />
                 </div>
@@ -93,7 +128,6 @@ export default function ClientesPage() {
           </div>
         </div>
 
-        {/* Filter Bar */}
         <div className="flex flex-col md:flex-row justify-between items-center gap-6 px-4">
           <div className="flex p-1.5 bg-white border border-stone-100 rounded-2xl shadow-sm">
             {['Todos', 'VIP', 'Leads'].map(seg => (
@@ -106,28 +140,17 @@ export default function ClientesPage() {
               </button>
             ))}
           </div>
-          <div className="relative group">
-            <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-stone-300 group-focus-within:text-olie-500 transition-colors" size={18} />
-            <input 
-              type="text" 
-              placeholder="Pesquisar no diretório..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="bg-white border border-stone-100 rounded-[2rem] pl-14 pr-8 py-4 text-xs font-medium outline-none w-80 shadow-olie-soft focus:ring-4 focus:ring-olie-500/5 transition-all" 
-            />
-          </div>
         </div>
 
-        {/* Client Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-32">
-          {filteredClients.map((client, i) => (
+          {filteredClients.length > 0 ? filteredClients.map((client, i) => (
             <div 
               key={client.id} 
               onClick={() => setSelectedClient(client)}
               className="bg-white p-10 rounded-[3.5rem] border border-stone-100 shadow-olie-soft hover:shadow-olie-lg hover:-translate-y-2 transition-all duration-700 cursor-pointer group relative overflow-hidden"
               style={{ animationDelay: `${i * 100}ms` }}
             >
-              {client.ltv > 3000 && (
+              {(client.ltv || 0) > 3000 && (
                 <div className="absolute -right-4 -top-4 w-20 h-20 bg-olie-50 rounded-full flex items-center justify-center p-6 text-olie-500/20 group-hover:text-olie-500/40 transition-colors">
                   <Star size={40} className="rotate-12" />
                 </div>
@@ -156,7 +179,7 @@ export default function ClientesPage() {
               <div className="mt-8 pt-8 border-t border-stone-50 flex justify-between items-center">
                  <div>
                     <p className="text-[9px] font-black uppercase text-stone-300 tracking-[0.2em] mb-1">Lifetime Value</p>
-                    <p className="text-xl font-black text-stone-800">R$ {client.ltv?.toLocaleString('pt-BR')}</p>
+                    <p className="text-xl font-black text-stone-800">R$ {client.ltv?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
                  </div>
                  <div className="flex flex-wrap gap-1 justify-end max-w-[120px]">
                     {client.tags.slice(0, 2).map(t => (
@@ -167,7 +190,12 @@ export default function ClientesPage() {
 
               <div className="absolute bottom-0 left-0 w-full h-1 bg-stone-50 group-hover:bg-olie-500 transition-colors" />
             </div>
-          ))}
+          )) : (
+            <div className="col-span-full py-40 text-center opacity-30 italic font-serif">
+              <Users size={48} strokeWidth={1} className="mb-4 mx-auto" />
+              <p className="text-xl">Nenhum cliente encontrado para "{searchTerm}".</p>
+            </div>
+          )}
         </div>
       </div>
 

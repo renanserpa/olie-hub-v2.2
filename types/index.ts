@@ -1,8 +1,32 @@
 
+import { z } from 'zod';
+
 /**
- * OlieHub V3 Enterprise - Type Definitions
- * Sincronizado com Supabase Database Schema
+ * Zod Schemas para Validação de Integridade
  */
+export const OrderSchema = z.object({
+  id: z.union([z.string(), z.number()]),
+  name: z.string().optional().default('Cliente Olie'),
+  status: z.string().optional().default('Aberto'),
+  price: z.string().optional().default('R$ 0,00'),
+  date: z.string().optional(),
+  product: z.string().optional().default('Pedido s/ descrição'),
+  items: z.array(z.any()).optional().default([]),
+});
+
+export const CustomerSchema = z.object({
+  id: z.string(),
+  full_name: z.string(),
+  email: z.string().email().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  ltv: z.number().default(0),
+  total_orders: z.number().default(0),
+  tags: z.array(z.string()).default([]),
+  channel_source: z.string().default('whatsapp'),
+});
+
+export type Order = z.infer<typeof OrderSchema>;
+export type Customer = z.infer<typeof CustomerSchema>;
 
 export type ChannelSource = 'whatsapp' | 'instagram' | 'pinterest' | 'facebook' | 'email';
 export type ConvoStatus = 'bot' | 'queue' | 'assigned' | 'closed';
@@ -16,18 +40,6 @@ export interface UserProfile {
   role: 'dev' | 'admin' | 'agent' | 'viewer';
   full_name?: string;
   avatar_url?: string;
-}
-
-export interface Customer {
-  id: string;
-  full_name: string;
-  email: string | null;
-  phone: string | null;
-  channel_source: ChannelSource;
-  ltv: number;
-  total_orders: number;
-  tags: string[];
-  created_at: string;
 }
 
 export interface Conversation {
@@ -57,32 +69,12 @@ export interface Product {
   id: string;
   sku_base: string;
   name: string;
-  // Added category_id to fix "Object literal may only specify known properties" errors in lib/constants.ts
   category_id: string;
   base_price: number;
   image_url: string;
-  options: any; // Armazenado como JSONB
+  options: any; 
 }
 
-export interface Order {
-  id: string;
-  customer_id?: string;
-  // Added optional fields to fix errors in app/pedidos/page.tsx and order-detail-drawer.tsx
-  name?: string;
-  product?: string;
-  price?: string;
-  date?: string;
-  customer_email?: string;
-  status: string;
-  total?: number;
-  items: any[];
-  timeline?: any[];
-  created_at?: string;
-}
-
-/**
- * Added CartItem interface to fix "Module has no exported member 'CartItem'" errors
- */
 export interface CartItem {
   product_id: string;
   name: string;
@@ -95,9 +87,6 @@ export interface CartItem {
   };
 }
 
-/**
- * Added Client interface to fix "Module has no exported member 'Client'" error in conversation-list.tsx
- */
 export interface Client {
   id: string;
   name: string;

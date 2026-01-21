@@ -8,7 +8,9 @@ import {
   ConvoStatus
 } from '../types/index.ts';
 import { GoogleGenAI, Type } from "@google/genai";
-import { supabase } from '../lib/supabase.ts';
+import { getSupabase } from '../lib/supabase.ts';
+
+const supabase = getSupabase();
 
 const getTinyCredentials = () => {
   if (typeof window === 'undefined') return { token: '', integratorId: '' };
@@ -204,32 +206,37 @@ export const OrderService = {
 
 export const AIService = {
   getDailyBriefing: async (overview: any) => {
-    const apiKey = (window as any).process?.env?.API_KEY;
-    if (!apiKey) return "Pronto para iniciar o dia no ateliê.";
+    const apiKey = process.env.API_KEY;
+    if (!apiKey) return "Pronto para iniciar o dia no ateliê Olie.";
     
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Dados do ateliê Olie: ${overview.productionQueue} ordens. Gere briefing executivo curto e motivador.`,
-        config: { maxOutputTokens: 250, thinkingConfig: { thinkingBudget: 100 } }
+        contents: `Você é o Concierge da Olie, um ateliê de couro de luxo. Temos ${overview.productionQueue} ordens em produção. Gere um briefing motivador e curto de 2 frases.`,
       });
       return response.text;
-    } catch (err) { return "Ateliê operando com excelência."; }
+    } catch (err) { 
+      console.error("Gemini Error:", err);
+      return "As bancadas estão prontas. Que o trabalho artesanal comece."; 
+    }
   },
   generateSmartReply: async (messages: Message[], clientName: string) => {
-    const apiKey = (window as any).process?.env?.API_KEY;
+    const apiKey = process.env.API_KEY;
     if (!apiKey) return "";
     
     try {
       const ai = new GoogleGenAI({ apiKey });
       const context = messages.slice(-5).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
-      const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: `Sugira resposta de luxo: ${context}` });
+      const response = await ai.models.generateContent({ 
+        model: 'gemini-3-flash-preview', 
+        contents: `Sugira uma resposta elegante e atenciosa para este cliente da Olie:\n${context}` 
+      });
       return response.text;
     } catch (err) { return ""; }
   },
   analyzeConversation: async (messages: Message[], clientName: string) => {
-    const apiKey = (window as any).process?.env?.API_KEY;
+    const apiKey = process.env.API_KEY;
     if (!apiKey) return { summary: "IA indisponível" };
 
     try {
@@ -237,7 +244,7 @@ export const AIService = {
       const context = messages.slice(-10).map(m => `${m.direction === 'inbound' ? clientName : 'Atendente'}: ${m.content}`).join('\n');
       const response = await ai.models.generateContent({
         model: 'gemini-3-pro-preview',
-        contents: `Analise conversa JSON: summary, sentiment, style_profile, next_step, suggested_skus. Contexto:\n${context}`,
+        contents: `Analise esta conversa de ateliê de luxo e retorne JSON com: summary, sentiment, style_profile, next_step, suggested_skus. Contexto:\n${context}`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -254,17 +261,19 @@ export const AIService = {
         }
       });
       return JSON.parse(response.text || '{}');
-    } catch (err) { return { summary: "Análise suspensa", sentiment: "Neutro", style_profile: "N/A", next_step: "N/A", suggested_skus: [] }; }
+    } catch (err) { 
+      return { summary: "Análise suspensa", sentiment: "Neutro", style_profile: "N/A", next_step: "N/A", suggested_skus: [] }; 
+    }
   },
   generateProductPreview: async (prompt: string) => {
-    const apiKey = (window as any).process?.env?.API_KEY;
+    const apiKey = process.env.API_KEY;
     if (!apiKey) return null;
 
     try {
       const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
-        contents: { parts: [{ text: `Product photo: ${prompt}` }] },
+        contents: { parts: [{ text: `High-end luxury leather product photo: ${prompt}` }] },
         config: { imageConfig: { aspectRatio: "1:1" } }
       });
       for (const part of response.candidates[0].content.parts) {

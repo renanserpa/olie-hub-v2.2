@@ -11,9 +11,9 @@ import SettingsPage from './app/settings/page.tsx';
 import ProductionPage from './app/production/page.tsx';
 import DebugPage from './app/admin/debug/page.tsx';
 
-// Garantia absoluta de que window.process existe no entry-point
+// Injeção de compatibilidade global
 if (typeof window !== 'undefined') {
-  (window as any).process = (window as any).process || { env: {} };
+  (globalThis as any).process = (window as any).process || { env: {} };
 }
 
 const normalizePath = (hash: string): string => {
@@ -40,28 +40,8 @@ const App = () => {
       }, 250);
     };
     window.addEventListener('hashchange', handleHashChange);
-    return () => {
-      window.removeEventListener('hashchange', handleHashChange);
-      if (navigationTimer.current) clearTimeout(navigationTimer.current);
-    };
+    return () => window.removeEventListener('hashchange', handleHashChange);
   }, [currentPath]);
-
-  useEffect(() => {
-    const env = (window as any).process?.env || {};
-    const hasEnvVars = !!env.NEXT_PUBLIC_SUPABASE_URL && !!env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-    const hasLocalStorage = !!localStorage.getItem('olie_supabase_url') && !!localStorage.getItem('olie_supabase_key');
-    
-    const isConfigured = hasEnvVars || hasLocalStorage;
-      
-    const path = normalizePath(window.location.hash);
-    
-    // Se não houver configuração, força ir para settings para que o usuário possa configurar localmente
-    if (!isConfigured && path !== '/settings') {
-      window.location.hash = '/settings';
-    } else if (!window.location.hash || window.location.hash === '#' || window.location.hash === '#/') {
-      window.location.hash = '/dashboard';
-    }
-  }, []);
 
   const renderPage = () => {
     try {
@@ -73,19 +53,8 @@ const App = () => {
       if (currentPath === '/clientes' || currentPath.startsWith('/clientes/')) return <ClientesPage />;
       return <DashboardPage />;
     } catch (err) {
-      console.error("Erro crítico na renderização da página:", err);
-      return (
-        <div className="flex-1 flex flex-col items-center justify-center p-20 text-center space-y-4">
-           <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center mb-4">!</div>
-           <h2 className="font-serif italic text-2xl text-stone-800">Falha no Carregamento do Módulo</h2>
-           <p className="text-sm text-stone-400 max-w-md italic">
-             Houve um problema ao carregar este componente. Isso pode ser causado por variáveis de ambiente ausentes ou erro de sintaxe nos hooks.
-           </p>
-           <button onClick={() => window.location.reload()} className="px-6 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest">
-             Tentar Recarregar
-           </button>
-        </div>
-      );
+      console.error("Erro na renderização da página:", err);
+      return <div className="p-20 text-center font-serif italic text-stone-400">Falha ao carregar o módulo. Verifique as configurações.</div>;
     }
   };
 
@@ -100,6 +69,10 @@ const App = () => {
 
 const container = document.getElementById('root');
 if (container) {
-  const root = createRoot(container);
-  root.render(<React.StrictMode><App /></React.StrictMode>);
+  try {
+    const root = createRoot(container);
+    root.render(<App />);
+  } catch (err) {
+    console.error("Erro fatal ao iniciar React:", err);
+  }
 }

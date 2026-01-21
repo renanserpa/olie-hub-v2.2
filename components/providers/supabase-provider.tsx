@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
-import { supabase as supabaseInstance } from '../../lib/supabase.ts';
+import { getSupabase } from '../../lib/supabase.ts';
 import { UserProfile } from '../../types/index.ts';
 
 interface SupabaseContext {
@@ -24,25 +24,27 @@ export default function SupabaseProvider({ children }: { children?: React.ReactN
     mounted.current = true;
 
     const initializeAuth = async () => {
-      // Se a instância for nula (sem credenciais), liberamos o loading imediatamente
-      if (!supabaseInstance) {
-        console.log("[SupabaseProvider] Instância nula detectada. Liberando loading para modo offline.");
+      const client = getSupabase();
+      
+      if (!client) {
         if (mounted.current) setIsLoading(false);
         return;
       }
 
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Timeout de conexão Supabase')), 4000)
-      );
+      // Timer de segurança de 2.5 segundos
+      const safetyTimer = setTimeout(() => {
+        if (isLoading && mounted.current) {
+          console.warn("[OlieHub] Conexão lenta. Liberando UI.");
+          setIsLoading(false);
+        }
+      }, 2500);
 
       try {
-        const sessionPromise = supabaseInstance.auth.getSession();
-        const { data } = (await Promise.race([sessionPromise, timeoutPromise])) as any;
-        const session = data?.session;
+        const { data: { session } } = await client.auth.getSession();
         
         if (session && mounted.current) {
           setUser(session.user);
-          const { data: profileData } = await supabaseInstance
+          const { data: profileData } = await client
             .from('profiles')
             .select('*')
             .eq('id', session.user.id)
@@ -53,51 +55,28 @@ export default function SupabaseProvider({ children }: { children?: React.ReactN
           }
         }
       } catch (err) {
-        console.warn("OlieHub Auth: Conexão restrita ou offline.", err);
+        console.error("Erro na inicialização de autenticação:", err);
       } finally {
-        if (mounted.current) {
-          setIsLoading(false);
-        }
+        clearTimeout(safetyTimer);
+        if (mounted.current) setIsLoading(false);
       }
     };
 
     initializeAuth();
 
-    let authSubscription: any = null;
-    if (supabaseInstance) {
-      const { data: { subscription } } = supabaseInstance.auth.onAuthStateChange((_event, session) => {
-        if (mounted.current) {
-          setUser(session?.user || null);
-          if (!session) setProfile(null);
-        }
-      });
-      authSubscription = subscription;
-    }
-
-    return () => {
-      mounted.current = false;
-      if (authSubscription) {
-        authSubscription.unsubscribe();
-      }
-    };
+    return () => { mounted.current = false; };
   }, []);
 
   if (isLoading) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#FAF9F6] z-[9999]">
-        <div className="relative group">
-          <div className="w-16 h-16 border-4 border-olie-500/10 border-t-olie-500 rounded-full animate-spin" />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-olie-500 font-serif italic font-bold text-xl select-none">O</span>
-          </div>
-        </div>
-        <p className="mt-6 text-[10px] font-black uppercase tracking-[0.3em] text-stone-300 animate-pulse">Sincronizando Workspace...</p>
+      <div className="h-screen w-full flex flex-col items-center justify-center bg-[#FAF9F6]">
+        <div className="w-10 h-10 border-2 border-olie-500/20 border-t-olie-500 rounded-full animate-spin" />
       </div>
     );
   }
 
   return (
-    <Context.Provider value={{ supabase: supabaseInstance, user, profile, isLoading }}>
+    <Context.Provider value={{ supabase: getSupabase(), user, profile, isLoading }}>
       {children}
     </Context.Provider>
   );

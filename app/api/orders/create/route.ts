@@ -1,7 +1,6 @@
 
 import { NextResponse } from 'next/server';
 import { CartItem } from '../../../types/index.ts';
-import { ENV } from '../../../lib/env.ts';
 
 const TINY_API_URL = 'https://api.tiny.com.br/api2';
 
@@ -10,14 +9,13 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { items, customer, token: bodyToken, integratorId } = body;
 
-    // Prioridade para dados injetados via UI (Configurações), fallback para ENV
-    const activeToken = (bodyToken && bodyToken.trim().length > 5) ? bodyToken : ENV.TINY_API_TOKEN;
-    const activeIntegratorId = integratorId || ENV.TINY_PARTNER_ID;
+    const activeToken = (bodyToken && bodyToken.trim().length > 5) ? bodyToken : process.env.TINY_API_TOKEN;
+    const activeIntegratorId = integratorId || process.env.TINY_PARTNER_ID;
 
     if (!activeToken || activeToken.trim().length < 10) {
       return NextResponse.json({ 
         error: 'Erro de Autenticação',
-        details: 'Token do Tiny ERP não configurado ou inválido.'
+        details: 'Token do Tiny ERP não configurado.'
       }, { status: 401 });
     }
 
@@ -44,15 +42,10 @@ export async function POST(request: Request) {
           if (cfg.hardware) specs.push(`Metais: ${cfg.hardware}`);
           if (cfg.personalization_text) specs.push(`Gravação: ${cfg.personalization_text}`);
           
-          const richDescription = specs.length > 0 
-            ? `${item.name} | ${specs.join(' | ')}` 
-            : item.name;
-            
           return {
             item: {
-              // Crucial: Usamos o SKU_BASE enviado pelo SmartOrderModal
               codigo: item.product_id || 'SKU-GENERIC',
-              descricao: richDescription,
+              descricao: specs.length > 0 ? `${item.name} | ${specs.join(' | ')}` : item.name,
               unidade: 'UN',
               quantidade: item.quantity || 1,
               valor_unitario: item.unit_price || 0,
@@ -83,17 +76,13 @@ export async function POST(request: Request) {
       }, { status: 400 });
     }
 
-    const registro = data.retorno.registros?.[0]?.registro;
     return NextResponse.json({
       status: 'success',
-      tiny_id: registro?.numero || registro?.id || 'OK',
+      tiny_id: data.retorno.registros?.[0]?.registro?.numero || 'OK',
       message: 'Pedido sincronizado com sucesso.'
     });
 
   } catch (error: any) {
-    return NextResponse.json({ 
-      error: 'Erro Interno no Proxy',
-      details: error.message 
-    }, { status: 500 });
+    return NextResponse.json({ error: 'Erro Interno no Proxy', details: error.message }, { status: 500 });
   }
 }

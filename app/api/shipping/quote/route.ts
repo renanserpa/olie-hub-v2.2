@@ -1,5 +1,5 @@
+
 import { NextResponse } from 'next/server';
-import { ENV } from '../../../lib/env.ts';
 
 /**
  * Tiny Shipping Proxy
@@ -9,13 +9,14 @@ export async function POST(request: Request) {
     const body = await request.json().catch(() => ({}));
     const { destinationZip, weight, value, token: bodyToken, integratorId } = body;
     
-    const activeToken = ENV.TINY_API_TOKEN || bodyToken;
-    const partnerId = integratorId || ENV.TINY_PARTNER_ID;
+    // Prioridade para variáveis de ambiente (Servidor)
+    const activeToken = process.env.TINY_API_TOKEN || bodyToken;
+    const partnerId = integratorId || process.env.TINY_PARTNER_ID || '10159';
 
     if (!activeToken) {
       return NextResponse.json({ 
         status: 'error',
-        error: 'Token de Autenticação ausente no lib/env.ts.' 
+        error: 'Token de Autenticação não configurado no servidor.' 
       }, { status: 401 });
     }
 
@@ -58,16 +59,6 @@ export async function POST(request: Request) {
       price: parseFloat(c.valor || c.preco || '0'),
       days: parseInt(c.prazo || c.dias || '0')
     }));
-
-    if (options.length === 0) {
-      return NextResponse.json({
-        status: 'success',
-        options: [
-          { name: 'PAC (Estimado)', price: 28.90, days: 7 },
-          { name: 'SEDEX (Estimado)', price: 54.20, days: 3 }
-        ]
-      });
-    }
 
     return NextResponse.json({ status: 'success', options });
 

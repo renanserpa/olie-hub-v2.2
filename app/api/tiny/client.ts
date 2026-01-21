@@ -1,26 +1,21 @@
+
 import { NextResponse } from 'next/server';
-import { ENV } from '../../lib/env.ts';
 
 const TINY_API_URL = 'https://api.tiny.com.br/api2';
 
 /**
- * TinyClient - OlieHub Server-Side Gateway
- * Gerencia a comunicação autenticada com o ERP Tiny via API 2.0.
+ * TinyClient - Production Gateway
  */
 export class TinyClient {
   private token: string;
 
   constructor(token?: string) {
-    // Tenta usar o token passado, senão busca na constante ENV
-    this.token = token?.trim() || ENV.TINY_API_TOKEN || '';
+    this.token = token?.trim() || process.env.TINY_API_TOKEN || '';
   }
 
-  /**
-   * Executa uma requisição POST utilizando URLSearchParams (exigência do Tiny)
-   */
   async post(endpoint: string, extraParams: Record<string, string> = {}) {
     if (!this.token) {
-      throw new Error('Token de API do Tiny ERP não configurado em lib/env.ts.');
+      throw new Error('Token de API do Tiny ERP não configurado em process.env.');
     }
 
     const params = new URLSearchParams();

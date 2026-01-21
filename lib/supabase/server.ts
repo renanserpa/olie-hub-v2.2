@@ -1,16 +1,15 @@
+
 import { createServerClient, type CookieOptions } from '@supabase/ssr'
-import { ENV } from '../env.ts';
 
 /**
- * Cria uma instância do cliente Supabase para operações que exigem contexto de servidor.
- * Prioriza chaves do objeto ENV.
+ * Cliente Supabase para operações de servidor
  */
 export function createClient() {
-  const SUPABASE_URL = ENV.SUPABASE_URL;
-  const SUPABASE_ANON_KEY = ENV.SUPABASE_ANON_KEY;
+  const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    throw new Error('Server Client Error: Missing Supabase Credentials in lib/env.ts.');
+    throw new Error('Server Client Error: Missing Supabase Credentials in process.env.');
   }
 
   return createServerClient(

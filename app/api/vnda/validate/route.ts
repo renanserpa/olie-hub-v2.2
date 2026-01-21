@@ -1,18 +1,17 @@
+
 import { NextResponse } from 'next/server';
-import { ENV } from '../../../lib/env.ts';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     
-    // Prioridade: 1. Token no body (teste manual), 2. Token no lib/env.ts, 3. process.env
-    const token = body.token || ENV.VNDA_TOKEN || process.env.VNDA_TOKEN;
-    const apiHost = ENV.VNDA_API_HOST || process.env.VNDA_API_HOST || 'https://api.vnda.com.br';
+    const token = body.token || process.env.VNDA_TOKEN;
+    const apiHost = process.env.VNDA_API_HOST || 'https://api.vnda.com.br';
 
     if (!token || token.trim().length < 5) {
       return NextResponse.json({ 
         status: 'unconfigured', 
-        message: 'Chave VNDA não configurada em lib/env.ts.' 
+        message: 'Chave VNDA não configurada no servidor.' 
       });
     }
 
@@ -32,7 +31,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       status: 'healthy', 
-      message: 'E-commerce VNDA: Conexão validada e pronta para vendas.' 
+      message: 'E-commerce VNDA: Conexão validada.' 
     });
 
   } catch (error: any) {

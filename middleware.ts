@@ -1,29 +1,91 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+
+import { createServerClient, type CookieOptions } from '@supabase/ssr'
+import { NextResponse, type NextRequest } from 'next/server'
 
 /**
- * Next.js Middleware - OlieHub Unblocker
- * Garante que rotas de API nunca fiquem pendentes por lógica de sessão.
+ * OlieHub Security Middleware
+ * Protege rotas de API sensíveis e gerencia a sessão do Supabase.
  */
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({
+    request: {
+      headers: request.headers,
+    },
+  })
 
-  // 🚨 CRÍTICO: Bypass total para rotas de API
-  if (pathname.startsWith('/api')) {
-    return NextResponse.next();
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return request.cookies.get(name)?.value
+        },
+        set(name: string, value: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value,
+            ...options,
+          })
+        },
+        remove(name: string, options: CookieOptions) {
+          request.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+          response = NextResponse.next({
+            request: {
+              headers: request.headers,
+            },
+          })
+          response.cookies.set({
+            name,
+            value: '',
+            ...options,
+          })
+        },
+      },
+    }
+  )
+
+  const { data: { session } } = await supabase.auth.getSession()
+
+  const { pathname } = request.nextUrl
+
+  // 1. Proteger rotas de API sensíveis (exceto webhooks externos)
+  const isSensitiveApi = 
+    pathname.startsWith('/api/tiny') || 
+    pathname.startsWith('/api/orders') ||
+    pathname.startsWith('/api/customers') ||
+    pathname.startsWith('/api/products') ||
+    (pathname.startsWith('/api/vnda') && !pathname.includes('/integration'));
+
+  if (isSensitiveApi && !session) {
+    return NextResponse.json(
+      { error: 'Unauthorized', message: 'Sessão necessária para acessar recursos do ateliê.' },
+      { status: 401 }
+    )
   }
 
-  return NextResponse.next();
+  // 2. Proteger páginas administrativas
+  if (pathname.startsWith('/admin') && !session) {
+    return NextResponse.redirect(new URL('/#settings', request.url))
+  }
+
+  return response
 }
 
 export const config = {
-  matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
-    '/((?!_next/static|_next/image|favicon.ico).*)',
-  ],
-};
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}

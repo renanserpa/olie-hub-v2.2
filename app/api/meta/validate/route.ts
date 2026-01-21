@@ -1,18 +1,17 @@
+
 import { NextResponse } from 'next/server';
-import { ENV } from '../../../lib/env.ts';
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}));
     
-    // Prioridade: 1. Token no body (teste manual), 2. Token no lib/env.ts, 3. process.env
-    const token = body.token || ENV.META_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN;
-    const phoneId = body.phoneId || ENV.META_PHONE_ID || process.env.META_PHONE_ID || 'me';
+    const token = body.token || process.env.META_ACCESS_TOKEN;
+    const phoneId = body.phoneId || process.env.META_PHONE_ID || 'me';
 
     if (!token || token.trim().length < 10) {
       return NextResponse.json({ 
         status: 'unconfigured', 
-        message: 'Token Meta não configurado em lib/env.ts.' 
+        message: 'Token Meta não configurado no servidor.' 
       });
     }
 

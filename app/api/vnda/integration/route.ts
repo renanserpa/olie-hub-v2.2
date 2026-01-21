@@ -1,52 +1,63 @@
 
 import { NextResponse } from 'next/server';
 import { supabase } from '../../../lib/supabase.ts';
-import { ENV } from '../../../lib/env.ts';
+import crypto from 'crypto';
 
 /**
- * VNDA Webhook Integration Route
- * Handlers para sincronização de E-commerce -> OlieHub
+ * VNDA Webhook Integration - Production Gateway
+ * Valida a autenticidade da requisição usando HMAC SHA256.
  */
 export async function POST(request: Request) {
   try {
-    const data = await request.json();
-    const userAgent = request.headers.get('user-agent') || '';
-    
-    // Log de auditoria para depuração no console do servidor
-    console.log(`[VNDA_WEBHOOK] Evento recebido:`, {
-      resource: data.resource,
-      event: data.event,
-      id: data.id
-    });
+    const rawBody = await request.text();
+    const signature = request.headers.get('x-vnda-signature');
+    const secret = process.env.VNDA_WEBHOOK_SECRET;
 
+    // Validação de Assinatura HMAC SHA256
+    if (secret && signature) {
+      const hmac = crypto.createHmac('sha256', secret);
+      const digest = hmac.update(rawBody).digest('hex');
+      
+      if (digest !== signature) {
+        console.error('[VNDA_SECURITY] Assinatura inválida detectada.');
+        return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+      }
+    }
+
+    const data = JSON.parse(rawBody);
+    
     if (!supabase) {
       return NextResponse.json({ error: 'Database connection unavailable' }, { status: 500 });
     }
 
-    // A VNDA envia webhooks estruturados por resource/event
-    const resource = data.resource; // 'order' | 'product' | 'variant'
-    const event = data.event;       // 'created' | 'updated' | 'confirmed'
+    const resource = data.resource;
+    const event = data.event;
+
+    // Auditoria de Sincronia no DB
+    await supabase.from('messages').insert([{
+      content: `[VNDA] Webhook verificado: ${resource}.${event} (ID: ${data.id})`,
+      direction: 'inbound',
+      read: true,
+      sender_type: 'client'
+    }]).catch(e => console.error("Audit log failed", e));
 
     switch (resource) {
       case 'order':
-        // Sincronização de Pedido VNDA -> OlieHub
-        // O ID do pedido VNDA é salvo para referência cruzada
         const { error: orderError } = await supabase
           .from('orders')
           .upsert({
-            id: data.id.toString(), // Usando o ID da VNDA como primário ou secundário dependendo do schema
-            customer_name: data.client?.name,
+            tiny_order_id: `VNDA-${data.id}`,
+            customer_name: data.client?.name || 'VNDA Customer',
             total_value: parseFloat(data.total || '0'),
-            status_tiny: mapVndaStatusToOlie(data.status), // Reutilizando status_tiny para consistência de interface
+            status_tiny: mapVndaStatusToOlie(data.status),
             updated_at: new Date().toISOString()
-          }, { onConflict: 'id' });
+          }, { onConflict: 'tiny_order_id' });
 
         if (orderError) throw orderError;
         break;
 
       case 'product':
       case 'variant':
-        // Sincronização de Preço/Estoque VNDA -> OlieHub
         const sku = data.sku || data.code;
         if (sku) {
           const { error: prodError } = await supabase
@@ -61,29 +72,16 @@ export async function POST(request: Request) {
           if (prodError) throw prodError;
         }
         break;
-
-      default:
-        console.warn(`[VNDA_WEBHOOK] Recurso não suportado: ${resource}`);
     }
 
-    return NextResponse.json({ 
-      status: 'success', 
-      received: true,
-      timestamp: new Date().toISOString() 
-    }, { status: 200 });
+    return NextResponse.json({ status: 'success', verified: true }, { status: 200 });
 
   } catch (error: any) {
     console.error(`[VNDA_WEBHOOK_ERROR]`, error.message);
-    return NextResponse.json({ 
-      status: 'error', 
-      message: error.message 
-    }, { status: 400 });
+    return NextResponse.json({ status: 'error', message: error.message }, { status: 400 });
   }
 }
 
-/**
- * Tradutor de Status VNDA para o Fluxo Olie
- */
 function mapVndaStatusToOlie(vndaStatus: string) {
   const s = String(vndaStatus || '').toLowerCase();
   if (s === 'confirmed' || s === 'paid') return 'Aprovado';
@@ -92,13 +90,6 @@ function mapVndaStatusToOlie(vndaStatus: string) {
   return 'Aberto';
 }
 
-/**
- * Health Check para o painel da VNDA
- */
 export async function GET() {
-  return NextResponse.json({ 
-    status: 'active', 
-    service: 'OlieHub VNDA Gateway',
-    version: '2.5.0'
-  });
+  return NextResponse.json({ status: 'active', gateway: 'OlieHub production' });
 }

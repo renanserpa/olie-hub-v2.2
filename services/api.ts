@@ -9,7 +9,6 @@ import {
 } from '../types/index.ts';
 import { GoogleGenAI, Type } from "@google/genai";
 import { supabase } from '../lib/supabase.ts';
-import { ENV } from '../lib/env.ts';
 
 const getTinyCredentials = () => {
   if (typeof window === 'undefined') return { token: '', integratorId: '' };
@@ -76,7 +75,6 @@ export const SyncService = {
   },
 
   detectConflicts: async () => {
-    // Simulação de detecção de conflitos entre Tiny e VNDA
     return [
       { sku: 'OL-LILLE-KTA', tinyPrice: 489.00, vndaPrice: 519.00, diff: 30.00 },
       { sku: 'OL-BOX-NEC', tinyPrice: 159.90, vndaPrice: 149.90, diff: -10.00 }
@@ -158,8 +156,6 @@ export const OrderService = {
   getList: async (): Promise<{ data: any[], error: string | null, isRealData: boolean }> => {
     try {
       const { token, integratorId } = getTinyCredentials();
-      if (!token && !ENV.TINY_API_TOKEN) return { data: [], error: null, isRealData: false };
-
       const response = await fetchWithTimeout('/api/orders/list', { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -315,7 +311,19 @@ export const DatabaseService = {
 };
 
 export const ShippingService = { 
-  calculate: async (destinationZip?: string) => [{ name: 'Correios', price: 25.0, days: 5 }] 
+  calculate: async (destinationZip?: string) => {
+    try {
+        const res = await fetch('/api/shipping/quote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ destinationZip })
+        });
+        const data = await res.json();
+        return data.options || [{ name: 'Correios', price: 25.0, days: 5 }];
+    } catch (e) {
+        return [{ name: 'Correios', price: 25.0, days: 5 }];
+    }
+  } 
 };
 export const OmnichannelService = { 
   sendMessage: async (source: string, id: string, text: string) => true 
